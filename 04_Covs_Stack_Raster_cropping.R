@@ -6,7 +6,7 @@ library(feather)
 library(sf)
 
 #Specify Drive Path
-drive_path <- "//worldpop.files.soton.ac.uk/worldpop/Projects/WP000016_FCDO/Working/MALAWI/Ortis/"
+drive_path <- "//Working/MALAWI/Ortis/"
 covs_path_2024 <- paste0(drive_path, "Input_Data/Mosaic_Covariates_2024/")
 output_path <- paste0(drive_path, "Output_Data/")
 shapefile_path <- paste0(drive_path, "Input_Data/Shapefiles/")

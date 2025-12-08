@@ -9,7 +9,7 @@ library(terra)
 library(exactextractr)
 
 #Specify Drive Path
-drive_path <- "//worldpop.files.soton.ac.uk/worldpop/Projects/WP000016_FCDO/Working/MALAWI/Ortis/"
+drive_path <- "//Working/MALAWI/Ortis/"
 input_path <- paste0(drive_path, "Output_Data/")
 shapefile_path <- paste0(drive_path, "Input_Data/Shapefiles/")
 covs_path_2018 <- paste0(drive_path, "Input_Data/Mosaic_Covariates_2018/")
