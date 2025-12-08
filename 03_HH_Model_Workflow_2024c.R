@@ -1,0 +1,2282 @@
+library(INLA)
+library(sf)
+library(gstat)
+library(spdep)
+library(car)
+library(caret)
+library(tictoc)
+library(terra)
+library(kableExtra)
+library(inlabru)
+library(feather)
+library(tidyverse)
+
+set.seed(1234) #set seed for reproducibility
+
+options(scipen = 999) # turn off scientific notation for all variables
+#options(digits = 3)
+
+#Specify Drive Path
+drive_path <- "//worldpop.files.soton.ac.uk/worldpop/Projects/WP000016_FCDO/Working/MALAWI/Ortis/"
+input_path <- paste0(drive_path, "Output_Data/")
+shapefile_path <- paste0(drive_path, "Input_Data/Shapefiles/")
+output_path <- paste0(drive_path, "Output_Data/")
+output_path1 <- paste0(drive_path, "Output_Data/Pop_Rasters/")
+
+#Load data
+pop_data <-  read.csv(paste0(input_path, "Malawi_2024_data.csv"))
+shapefile <- st_read(paste0(shapefile_path, "2018_MPHC_EAs_Final_for_Use_Corrected.shp"))
+
+#create unique id for each district
+pop_data <- pop_data %>% 
+  group_by(DIST_NAME) %>%
+  mutate(dist_id = cur_group_id()) %>%
+  ungroup() 
+
+#Create id for rural urban
+pop_data <- pop_data %>% 
+  mutate(rural_urban_id = case_when(
+    ADM_STATUS == "Rural" ~ 1,
+    ADM_STATUS == "Urban" ~ 2,
+    ADM_STATUS == "NA" ~ 1))
+
+#summarize 
+summary(pop_data$observed_hh_count)
+
+#Calculate hh_density
+pop_data <- pop_data %>% 
+  mutate(hh_density = observed_hh_count/google_v2_5)
+
+#check summary stats 
+summary(pop_data$hh_density)
+
+#filter hh_density which is NA
+EA_pop <- pop_data %>% 
+  drop_na(hh_density) %>% 
+  filter(!is.infinite(hh_density))
+
+#check summary stats 
+summary(EA_pop$hh_density)
+summary(EA_pop$observed_hh_count)
+summary(EA_pop$google_v2_5)
+
+#Boxplot of observed_hh_count distribution
+ggplot(data = EA_pop, aes(y=hh_density))+
+  geom_boxplot(color="blue", alpha=0.2)
+
+
+# Density plot of household density
+ggplot(data = EA_pop, aes(x = hh_density)) +
+  geom_density(
+    fill = "blue", 
+    alpha = 0.4, 
+    color = "blue"
+  ) +
+  labs(
+    x = "Household Density",
+    y = "Density",
+    title = "Density Plot of Household Density"
+  ) +
+  theme_minimal()
+
+#plot HH Count
+ggplot(data = EA_pop, aes(x = observed_hh_count)) +
+  geom_histogram(
+    fill = "blue", 
+    alpha = 0.4, 
+    color = "blue"
+  ) +
+  labs(
+    x = "Household Count",
+    y = "Density",
+    title = "Density Plot of Household Count"
+  ) +
+  theme_minimal()
+
+# Remove HH count below 30 and above 750
+EA_pop <- EA_pop %>% 
+  filter(observed_hh_count > 30 & observed_hh_count < 750)
+
+#plot HH Count
+ggplot(data = EA_pop, aes(x = observed_hh_count)) +
+  geom_histogram(
+    fill = "blue", 
+    alpha = 0.4, 
+    color = "blue"
+  ) +
+  labs(
+    x = "Household Count",
+    y = "Density",
+    title = "Density Plot of Household Count"
+  ) +
+  theme_minimal()
+
+
+#Boxplot of HH density
+ggplot(data = EA_pop, aes(y=hh_density))+
+  geom_boxplot(color="blue", alpha=0.2)
+
+
+#plot Density
+ggplot(data = EA_pop, aes(x = hh_density)) +
+  geom_histogram(
+    fill = "blue", 
+    alpha = 0.4, 
+    color = "blue"
+  ) +
+  labs(
+    x = "Household Density",
+    y = "Density",
+    title = "HH Density"
+  ) +
+  theme_minimal()
+
+#check summary stats 
+summary(EA_pop$hh_density)
+
+#Density below 10
+EA_pop<- EA_pop %>% 
+  filter(hh_density < 10)
+
+#check summary stats 
+summary(EA_pop$hh_density)
+
+# Density plot of household density
+ggplot(data = EA_pop, aes(x = hh_density)) +
+  geom_density(
+    fill = "blue", 
+    alpha = 0.4, 
+    color = "blue"
+  ) +
+  labs(
+    x = "Household Density",
+    y = "Density",
+    title = "Density Plot of Household Density"
+  ) +
+  theme_minimal()
+
+#Check building count
+summary(EA_pop$google_v2_5)
+
+#Boxplot of Building Count
+ggplot(data = EA_pop, aes(y=google_v2_5))+
+  geom_boxplot(color="blue", alpha=0.2)
+
+# Density plot of Building Count
+ggplot(data = EA_pop, aes(x = google_v2_5)) +
+  geom_density(
+    fill = "blue", 
+    alpha = 0.4, 
+    color = "blue"
+  ) +
+  labs(
+    x = "Count Building",
+    y = "Density",
+    title = "Building Count"
+  ) +
+  theme_minimal()
+
+# There are some outliers in building count. Removing bcount above 1000
+EA_pop <- EA_pop %>% 
+  filter(google_v2_5 < 1000)
+
+#plot the distribution again and check
+# Density plot of Building Count
+ggplot(data = EA_pop, aes(x = google_v2_5)) +
+  geom_density(
+    fill = "blue", 
+    alpha = 0.4, 
+    color = "blue"
+  ) +
+  labs(
+    x = "Count Building",
+    y = "Density",
+    title = "Building Count"
+  ) +
+  theme_minimal()
+
+
+##########################################################################################################
+# Covariate selection -----------------------------------------------------
+
+#Covs selection
+covs <- EA_pop  %>% 
+  select(starts_with("x"))
+
+# Calcute mean and standard deviation of covariates
+cov_stats <- data.frame(Covariate = colnames(covs),
+                        Mean = apply(covs, 2, mean, na.rm = TRUE),
+                        Std_Dev = apply(covs, 2, sd, na.rm = TRUE))
+
+#Scaling function to scale covariates
+stdize <- function(x)
+{ stdz <- (x - mean(x, na.rm=T))/sd(x, na.rm=T)
+return(stdz) }
+
+#apply scaling function
+covs <- apply(covs, 2, stdize) %>%    #z-score
+  as_tibble()
+
+#Select response variable and cbind covs
+
+covs_selection <- EA_pop %>% 
+  select(hh_density) %>% 
+  cbind(covs) 
+
+
+#drop columns with NAs
+covs_selection <- covs_selection %>%
+  select(where(~ !all(is.na(.))))
+
+# Covariate Selection -----------------------------------------------------
+
+#Stepwise covariates selection for pop data
+
+#fit a glm model with poisson distribution
+full_model <- glm(hh_density ~ ., data = covs_selection, family = gaussian)
+
+#stepwise selection
+step_model1 <- MASS::stepAIC(full_model, direction = "both")
+summary(step_model1)
+vif(step_model1)
+
+# Function to iteratively drop variables with high VIF
+drop_high_vif <- function(model, threshold = 5) {
+  # Calculate VIFs
+  vif_values <- vif(model)
+  
+  # Loop until all VIFs are below the threshold
+  while (any(vif_values > threshold)) {
+    # Find the variable with the highest VIF
+    max_vif_var <- names(which.max(vif_values))
+    
+    # Update the formula to exclude the variable with the highest VIF
+    formula <- as.formula(paste(". ~ . -", max_vif_var))
+    model <- update(model, formula)
+    
+    # Recalcuye VIFs
+    vif_values <- vif(model)
+  }
+  
+  return(model)
+}
+
+
+# Apply the function to drop high VIF variables
+step1_updated <- drop_high_vif(step_model1)
+summary(step1_updated)
+vif(step1_updated)
+
+# Extract selected variables
+selected_vars <- step1_updated$coefficients%>% 
+  names()  # Get the selected variables
+
+# Create model formula
+formula_string <- paste("hh_density ~", paste(selected_vars, collapse = " + "))
+final_formula <- as.formula(formula_string)
+
+# Print final model formula
+print(final_formula)
+
+#function to drop non-significant variables
+# Start with full model
+current_formula <- as.formula("hh_density ~  x13 + x32 + x36 + x38 + x39 + x40 + 
+    x41 + x44 + x45 + x47 + x49 + x51 + x55 + x56 + x61 + x63 + 
+    x64")
+
+# Loop to drop non-significant variables
+repeat {
+  model <- glm(current_formula, data = covs_selection, family = gaussian)
+  model_summary <- summary(model)
+  
+  # Extract p-values (skip intercept)
+  p_vals <- coef(model_summary)[-1, "Pr(>|t|)"]
+  
+  # Identify variable with highest p-value
+  max_pval <- max(p_vals, na.rm = TRUE)
+  worst_var <- names(p_vals)[which.max(p_vals)]
+  
+  # Stop if all p-values < 0.05
+  if (max_pval < 0.05) break
+  
+  # Drop the variable with the highest p-value
+  message("Dropping variable: ", worst_var, " (p = ", signif(max_pval, 4), ")")
+  rhs <- attr(terms(current_formula), "term.labels")
+  new_rhs <- setdiff(rhs, worst_var)
+  current_formula <- as.formula(paste("hh_density ~", paste(new_rhs, collapse = " + ")))
+}
+
+# Final model
+final_model <- model
+summary(final_model)
+vif(final_model)
+
+
+# Extract the formula from final model
+final_model <- formula(final_model)
+final_model 
+
+#selected covariates are still many use LASSO regression to rank covariate importance and drop less
+#important covariates
+
+#Fit a model using the LASSO with the caret package
+
+#drop NAs in covariates for LASSO fitting
+covs_selection1 <- covs_selection %>% 
+  drop_na() 
+
+#Lasso Regression
+fit1_lasso <- train(
+  hh_density ~ x13 + x32 + x36 + x38 + x39 + x41 + x44 + x45 + 
+    x47 + x49 + x55 + x56 + x61 + x63 + x64,
+  data = covs_selection1,
+  method = "glmnet",
+  metric = "RMSE",  # Choose from RMSE, RSquared, AIC, BIC, ...others?
+  tuneGrid = expand.grid(
+    .alpha = 1,  # optimize a ridge regression
+    .lambda = seq(0, 5, length.out = 101)))
+
+fit1_lasso
+
+#Select important variables
+
+varImp(fit1_lasso)
+
+#Rank variables
+
+plot(varImp(fit1_lasso))
+
+
+#Selected covariates for final modelling
+#x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61
+
+#select important variables from pop_data and cbind scaled covariates for model fitting
+EA_pop <- EA_pop %>% 
+  select(-starts_with("x")) %>% 
+  cbind(covs) 
+
+#Assign unique values to each row
+EA_pop <- EA_pop %>% 
+  tibble::rowid_to_column("id")
+
+
+#get distinct count of rural urban
+rural_urban_group <- EA_pop %>% 
+  distinct(rural_urban_id) %>% 
+  nrow()
+
+# #get distinct count of district
+dist_groups <- EA_pop %>% 
+  distinct(dist_id) %>% 
+  nrow()
+
+# #get distinct count of EA
+ea_groups <- EA_pop %>% 
+  distinct(id) %>% 
+  nrow()
+
+#define priors
+#hyper.prec = list(theta = list(prior="pc.prec", param=c(0.01,0.01)))
+#control.fixed = list(mean=0, prec=1/1000, mean.intercept=0, prec.intercept=1/1000) 
+
+#########################################################################
+#########################################################################
+################ HOUSEHOLD COUNT MODELLING ################################
+# Fit Models --------------------------------------------------------------
+
+#Model1 -  Fixed Effect + Urban_Rural_Random_Effect
+
+formula1 <- hh_density ~  x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61 +
+  Random_rural_urban(rural_urban_id, model = "iid", mapper = bru_mapper_index(n = rural_urban_group))
+
+#fit model using a gamma distribution
+mod1_count <- bru(formula1,
+                  data = EA_pop,
+                  family = "gamma", 
+                  options = list(
+                    #control.fixed = control.fixed,
+                    control.compute = list(waic = TRUE, cpo = TRUE, dic = TRUE),
+                    control.inla = list(int.strategy = "eb"),
+                    verbose = FALSE,
+                    num.threads = "1"))
+
+
+summary(mod1_count)
+
+#Extract in-sample predictions
+in_sample_predictions1 <- predict(mod1_count, newdata = EA_pop, formula = ~ Intercept + 
+                                    x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61 +
+                                    Random_rural_urban_eval(rural_urban_id),
+                                  n.samples = 100, 
+                                  seed = 2,
+                                  num.threads = "1" )
+
+#Back transform the mean 
+in_sample_predictions1 <- in_sample_predictions1 %>% 
+  mutate (predicted_density = exp(mean), 
+          predicted_hh_count = predicted_density * google_v2_5) %>% 
+  rename(observed_hh_count = observed_hh_count, observed_density = hh_density)
+
+#sum population
+sum(in_sample_predictions1$predicted_hh_count)   # Predicted hh count
+sum(in_sample_predictions1$observed_hh_count, na.rm = T)  # Observed hh count
+
+
+#Compute model performance metrics
+
+#Density metrics
+
+density_metrics1 <- in_sample_predictions1 %>% 
+  mutate(residual = observed_density - predicted_density) %>% 
+  summarise(
+    Bias= mean(residual),
+    Imprecision = sd(residual),
+    mae = mean(abs(residual)),
+    mse = mean((residual)^2),
+    rmse = sqrt(mse),
+    Corr = cor(observed_density, predicted_density))
+
+density_metrics1 %>% 
+  kable()
+
+#Total HH Count
+hh_metrics1 <- in_sample_predictions1 %>% 
+  mutate(residual = observed_hh_count - predicted_hh_count) %>% 
+  summarise(
+    Bias= mean(residual),
+    Imprecision = sd(residual),
+    mae = mean(abs(residual)),
+    mse = mean((residual)^2),
+    rmse = sqrt(mse),
+    Corr = cor(observed_hh_count, predicted_hh_count))
+
+hh_metrics1 %>% 
+  kable()
+
+#############################################################################
+#############################################################################
+###############################################################################
+#Model 2 - Fixed Effect + Urban_Rural_Random_Effect + Dist_Random_Effect
+
+formula2 <- hh_density ~  x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61  + 
+  Random_rural_urban(rural_urban_id, model = "iid", mapper = bru_mapper_index(n = rural_urban_group))+
+  Random_dist(dist_id, model = "iid", mapper = bru_mapper_index(n = dist_groups))
+
+
+#fit model using a gamma distribution
+mod2_count <- bru(formula2,
+                  data = EA_pop,
+                  family = "gamma", 
+                  options = list(
+                    #control.fixed = control.fixed,
+                    control.compute = list(waic = TRUE, cpo = TRUE, dic = TRUE),
+                    control.inla = list(int.strategy = "eb"),
+                    verbose = FALSE,
+                    num.threads = "1"))
+
+summary(mod2_count)
+
+#Extract in-sample predictions
+in_sample_predictions2 <- predict(mod2_count, newdata = EA_pop, formula = ~ Intercept + 
+                                    x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61  +
+                                    Random_rural_urban_eval(rural_urban_id)+
+                                    Random_dist_eval(dist_id),
+                                  n.samples = 100, 
+                                  seed = 2,
+                                  num.threads = "1" )
+
+#Back transform the mean 
+in_sample_predictions2 <- in_sample_predictions2 %>% 
+  mutate (predicted_density = exp(mean), 
+          predicted_hh_count = predicted_density * google_v2_5)%>% 
+  rename(observed_hh_count = observed_hh_count, observed_density = hh_density)
+
+#sum population
+sum(in_sample_predictions2$predicted_hh_count)   # Predicted hh count
+sum(in_sample_predictions2$observed_hh_count, na.rm = T)  # Observed hh count
+
+#Compute model performance metrics
+
+#Density metrics
+
+density_metrics2 <- in_sample_predictions2 %>% 
+  mutate(residual = observed_density - predicted_density) %>% 
+  summarise(
+    Bias= mean(residual),
+    Imprecision = sd(residual),
+    mae = mean(abs(residual)),
+    mse = mean((residual)^2),
+    rmse = sqrt(mse),
+    Corr = cor(observed_density, predicted_density))
+
+density_metrics2 %>% 
+  kable()
+
+#Total hh
+hh_metrics2 <- in_sample_predictions2 %>% 
+  mutate(residual = observed_hh_count - predicted_hh_count) %>% 
+  summarise(
+    Bias= mean(residual),
+    Imprecision = sd(residual),
+    mae = mean(abs(residual)),
+    mse = mean((residual)^2),
+    rmse = sqrt(mse),
+    Corr = cor(observed_hh_count, predicted_hh_count))
+
+hh_metrics2 %>% 
+  kable()
+
+#############################################################################
+#############################################################################
+###############################################################################
+#Model 3 - Fixed Effect + Urban_Rural_Random_Effect + Dist_Random_Effect + EA Random_Effect
+
+formula3 <- hh_density ~  x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61  + 
+  Random_rural_urban(rural_urban_id, model = "iid",  mapper = bru_mapper_index(n = rural_urban_group))+
+  Random_dist(dist_id, model = "iid", mapper = bru_mapper_index(n = dist_groups))+
+  Random_EA(id, model = "iid", mapper = bru_mapper_index(n = ea_groups))
+
+
+#fit model using a gamma distribution
+mod3_count <- bru(formula3,
+                  data = EA_pop,
+                  family = "gamma", 
+                  options = list(
+                    #control.fixed = control.fixed,
+                    control.compute = list(waic = TRUE, cpo = TRUE, dic = TRUE),
+                    control.inla = list(int.strategy = "eb"),
+                    verbose = FALSE,
+                    num.threads = "1"))
+
+
+summary(mod3_count)
+
+#Extract in-sample predictions
+in_sample_predictions3 <- predict(mod3_count, newdata = EA_pop, formula = ~ Intercept + 
+                                    x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61  +
+                                    Random_rural_urban_eval(rural_urban_id)+
+                                    Random_EA_eval(id)+
+                                    Random_dist_eval(dist_id),
+                                  n.samples = 100, 
+                                  seed = 2,
+                                  num.threads = "1" )
+
+#Back transform the mean 
+in_sample_predictions3 <- in_sample_predictions3 %>% 
+  mutate (predicted_density = exp(mean), 
+          predicted_hh_count = predicted_density * google_v2_5) %>% 
+  rename(observed_hh_count = observed_hh_count, observed_density = hh_density)
+
+#sum population
+sum(in_sample_predictions3$predicted_hh_count)   # Predicted hh count
+sum(in_sample_predictions3$observed_hh_count, na.rm = T)  # Observed hh count
+
+#Compute model performance metrics
+
+#Density metrics
+
+density_metrics3 <- in_sample_predictions3 %>% 
+  mutate(residual = observed_density - predicted_density) %>% 
+  summarise(
+    Bias= mean(residual),
+    Imprecision = sd(residual),
+    mae = mean(abs(residual)),
+    mse = mean((residual)^2),
+    rmse = sqrt(mse),
+    Corr = cor(observed_density, predicted_density))
+
+density_metrics3 %>% 
+  kable()
+
+#Total hh
+hh_metrics3 <- in_sample_predictions3 %>% 
+  mutate(residual = observed_hh_count - predicted_hh_count) %>% 
+  summarise(
+    Bias= mean(residual),
+    Imprecision = sd(residual),
+    mae = mean(abs(residual)),
+    mse = mean((residual)^2),
+    rmse = sqrt(mse),
+    Corr = cor(observed_hh_count, predicted_hh_count))
+
+hh_metrics3 %>% 
+  kable()
+
+
+##############################################################################
+#############################################################################
+# Geostatistical Model - INLA SPDE ----------------------------------------
+
+#-Define the coordinates of centroids
+coords <- cbind(EA_pop$long, EA_pop$lat) 
+
+#measure distance between coordinates
+summary(dist(coords)) #summarizes the Euclidean distance between points in the spatial domain
+
+
+#build non-convex hull mesh
+non_convex_bdry <- inla.nonconvex.hull(coords, -0.03, -0.05, resolution = c(100, 100))
+mesh <- fm_mesh_2d_inla(boundary = non_convex_bdry, max.edge=c(0.1, 1), 
+                        offset = c(0.05, 1),
+                        cutoff = 0.003)
+
+plot(mesh)
+plot(mesh, add=T)
+points(coords, col="red", pch="*")
+
+#Count of mesh nodes
+mesh$n
+
+#Build the SPDE
+spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)
+
+#specify model 
+
+formula4 <- hh_density ~  x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61  +
+  Random_rural_urban(rural_urban_id, model = "iid", mapper = bru_mapper_index(n = rural_urban_group))+
+  Random_dist(dist_id, model = "iid", mapper = bru_mapper_index(n = dist_groups))+
+  Random_EA(id, model = "iid",  mapper = bru_mapper_index(n = ea_groups))+
+  Random_Spat(main = coords, model = spde)
+
+#fit model using a gamma distribution
+mod4_count <- bru(formula4,
+                  data = EA_pop,
+                  family = "gamma", 
+                  options = list(
+                    #control.fixed = control.fixed,
+                    control.compute = list(waic = TRUE, cpo = TRUE, dic = TRUE),
+                    control.inla = list(int.strategy = "eb"),
+                    verbose = FALSE,
+                    num.threads = "1"))
+
+summary(mod4_count)
+
+#Extract in-sample predictions
+in_sample_predictions4 <- predict(mod4_count, newdata = EA_pop, formula = ~ Intercept + 
+                                    x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61  +
+                                    Random_rural_urban_eval(rural_urban_id)+
+                                    Random_EA_eval(id)+
+                                    Random_dist_eval(dist_id)+
+                                    Random_Spat_eval(cbind(long, lat)),
+                                  n.samples = 100, 
+                                  seed = 2,
+                                  num.threads = "1" )
+
+#Back transform the mean 
+in_sample_predictions4 <- in_sample_predictions4 %>% 
+  mutate (predicted_density = exp(mean), 
+          predicted_hh_count = predicted_density * google_v2_5)%>% 
+  rename(observed_hh_count = observed_hh_count, observed_density = hh_density)
+
+#sum population
+sum(in_sample_predictions4$predicted_hh_count)   # Predicted hh count
+sum(in_sample_predictions4$observed_hh_count, na.rm = T)  # Observed hh count
+
+#Compute model performance metrics
+
+#Density metrics
+
+density_metrics4 <- in_sample_predictions4 %>% 
+  #drop_na(observed_density) %>% 
+  mutate(residual = observed_density - predicted_density) %>% 
+  summarise(
+    Bias= mean(residual),
+    Imprecision = sd(residual),
+    mae = mean(abs(residual)),
+    mse = mean((residual)^2),
+    rmse = sqrt(mse),
+    Corr = cor(observed_density, predicted_density))
+
+density_metrics4 %>% 
+  kable()
+
+#Total Population
+hh_metrics4 <- in_sample_predictions4 %>% 
+  # filter(observed_hh_count > 0) %>% 
+  mutate(residual = observed_hh_count - predicted_hh_count) %>% 
+  summarise(
+    Bias= mean(residual),
+    Imprecision = sd(residual),
+    mae = mean(abs(residual)),
+    mse = mean((residual)^2),
+    rmse = sqrt(mse),
+    Corr = cor(observed_hh_count, predicted_hh_count))
+
+hh_metrics4 %>% 
+  kable()
+
+
+# Model Checks ------------------------------------------------------------
+
+#DIC
+t(c(mod1_count=mod1_count$dic$dic, mod2_count=mod2_count$dic$dic,
+    mod3_count=mod3_count$dic$dic, mod4_count=mod4_count$dic$dic))
+
+
+
+#compare models
+hh <- rbind(hh_metrics1, hh_metrics2, hh_metrics3, hh_metrics4)
+hh%>%  kable()
+
+dens <- rbind(density_metrics1, density_metrics2, density_metrics3, density_metrics4)
+dens %>%  kable()
+
+##############################################################################################
+##############################################################################################
+########## CROSS VALIDATION #############################################################
+
+# K-Fold Cross Validation for Model 3-------------------------------------------------
+
+# function to calculate k-fold
+kfold_cv <- function(data, k) {
+  n <- nrow(data)
+  fold_size <- n %/% k
+  folds <- sample(rep(1:k, each = fold_size, length.out = n))
+  
+  # Create separate dataframes for train and test metrics
+  train_metrics <- data.frame()
+  test_metrics <- data.frame()
+  
+  # Place holder for train metrics calculation ----------------------------
+  
+  #density metrics
+  dens_train_rmse_values <- numeric(k) # Placeholder for RMSE
+  dens_train_pearson_values <- numeric(k) # Placeholder for corr
+  dens_train_mae_values <- numeric(k)  # Placeholder for MAE
+  dens_train_bias_values <- numeric(k)  # Placeholder for bias
+  
+  #HH metrics
+  hh_train_rmse_values <- numeric(k) # Placeholder for RMSE
+  hh_train_pearson_values <- numeric(k) # Placeholder for corr
+  hh_train_mae_values <- numeric(k)  # Placeholder for MAE
+  hh_train_bias_values <- numeric(k)  # Placeholder for bias
+  
+  
+  # Place holder for test metrics calculation -------------------------
+  
+  #Density metrics
+  dens_test_rmse_values <- numeric(k) # Placeholder for RMSE
+  dens_test_pearson_values <- numeric(k) # Placeholder for corr
+  dens_test_mae_values <- numeric(k)  # Placeholder for MAE
+  dens_test_bias_values <- numeric(k)  # Placeholder for bias
+  
+  #HH metrics
+  hh_test_rmse_values <- numeric(k) # Placeholder for RMSE
+  hh_test_pearson_values <- numeric(k) # Placeholder for corr
+  hh_test_mae_values <- numeric(k)  # Placeholder for MAE
+  hh_test_bias_values <- numeric(k)  # Placeholder for bias
+  
+  #Initialize data frame to store train values and predictions outside the loop
+  train_results_df <- data.frame(EA_CODE = numeric(),id = numeric(), Total_Building_Count = numeric(), 
+                                 folds = numeric(), observed_density = numeric(), 
+                                 predicted_density = numeric(), observed_hh_count = numeric(), 
+                                 predicted_hh_count =numeric())
+  
+  # Initialize data frame to store test values and predictions outside the loop
+  test_results_df <- data.frame(EA_CODE = numeric(), id = numeric(), Total_Building_Count = numeric(), 
+                                folds = numeric(), observed_density = numeric(), 
+                                predicted_density = numeric(), observed_hh_count = numeric(), 
+                                predicted_hh_count =numeric())
+  
+  # For loop for implementation ---------------------------------------------
+  for (i in 1:k) {
+    test_indices <- which(folds == i)
+    train_indices <- which(folds != i)
+    
+    train_data <- data[train_indices, ]
+    test_data <- data[test_indices, ]
+    
+    #create a new cluster id for the train data
+    train_data <- train_data %>%
+      rowid_to_column("idx")
+    
+    # #get distinct count of idx
+    train_id_groups <- train_data %>%
+      distinct(idx) %>%
+      nrow()
+    
+    #create a new idx in test data for evaluation
+    test_data <- test_data %>%
+      mutate(idx = (train_id_groups+1) : (train_id_groups + nrow(test_data)))
+    
+    print(paste("Processing fold", i, "out of", k))
+    
+    #Model formula
+    formula4 <- hh_density ~  x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61  +
+      Random_rural_urban(rural_urban_id, model = "iid", mapper = bru_mapper_index(n = rural_urban_group))+
+      Random_dist(dist_id, model = "iid", mapper = bru_mapper_index(n = dist_groups))+
+      Random_EA(idx, model = "iid", mapper = bru_mapper_index(n = train_id_groups))
+    
+    #fit model using a gamma distribution
+    mod2 <- bru(formula4,
+                data = train_data,
+                family = "gamma", 
+                options = list(
+                  control.compute = list(waic = TRUE, cpo = TRUE, dic = TRUE),
+                  control.inla = list(int.strategy = "eb"),
+                  verbose = FALSE))
+    
+    #summary(mod2)
+    
+    #Make Predictions for train data
+    train_predictions <- predict(mod2, newdata = train_data, formula = ~ Intercept + 
+                                   x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61 +
+                                   Random_rural_urban_eval(rural_urban_id)+
+                                   Random_EA_eval(idx)+
+                                   Random_dist_eval(dist_id),
+                                 n.samples = 100, 
+                                 seed = 2)
+    
+    #Back transform the mean 
+    train_predictions  <- train_predictions %>%
+      mutate (predicted_density = exp(mean), 
+              predicted_hh_count = predicted_density * google_v2_5) %>%
+      rename(observed_hh_count = observed_hh_count, observed_density = hh_density)
+    
+    
+    #Train data metrics
+    #Density
+    dens_train_rmse_values[i] <- sqrt(mean((train_predictions$observed_density - train_predictions$predicted_density)^2))
+    dens_train_pearson_values[i] <- cor(train_predictions$observed_density, train_predictions$predicted_density)
+    dens_train_mae_values[i] <- mean(abs(train_predictions$observed_density - train_predictions$predicted_density))
+    dens_train_bias_values[i] <- mean(train_predictions$observed_density - train_predictions$predicted_density)
+    
+    #Population
+    hh_train_rmse_values[i] <- sqrt(mean((train_predictions$observed_hh_count - train_predictions$predicted_hh_count)^2))
+    hh_train_pearson_values[i] <- cor(train_predictions$observed_hh_count, train_predictions$predicted_hh_count)
+    hh_train_mae_values[i] <- mean(abs(train_predictions$observed_hh_count - train_predictions$predicted_hh_count))
+    hh_train_bias_values[i] <- mean(train_predictions$observed_hh_count - train_predictions$predicted_hh_count)
+    
+    # Append observed and predictions for TRAIN data
+    fold_train_results <- data.frame(EA_CODE = train_data$EA_CODE, id = train_predictions$id, 
+                                     Total_Building_Count = train_predictions$google_v2_5,
+                                     folds = i, observed_density = train_predictions$observed_density, 
+                                     predicted_density = train_predictions$predicted_density, 
+                                     observed_hh_count = train_predictions$observed_hh_count, 
+                                     predicted_hh_count = train_predictions$predicted_hh_count)
+    
+    train_results_df <- rbind(train_results_df, fold_train_results)
+    
+    # Make Predictions for Test Data ------------------------------------------
+    
+    #Make Predictions for test data
+    test_predictions <- predict(mod2, newdata = test_data, formula = ~ Intercept + 
+                                  x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61 +
+                                  Random_rural_urban_eval(rural_urban_id)+
+                                  Random_EA_eval(idx)+
+                                  Random_dist_eval(dist_id), 
+                                n.samples = 100, 
+                                seed = 2)
+    
+    #Back transform the mean 
+    test_predictions  <- test_predictions %>%
+      mutate (predicted_density = exp(mean), 
+              predicted_hh_count = predicted_density * google_v2_5) %>%
+      rename(observed_hh_count = observed_hh_count, observed_density = hh_density)
+    
+    #Test data metrics
+    #Density
+    dens_test_rmse_values[i] <- sqrt(mean((test_predictions$observed_density - test_predictions$predicted_density)^2))
+    dens_test_pearson_values[i] <- cor(test_predictions$observed_density, test_predictions$predicted_density)
+    dens_test_mae_values[i] <- mean(abs(test_predictions$observed_density - test_predictions$predicted_density))
+    dens_test_bias_values[i] <- mean(test_predictions$observed_density - test_predictions$predicted_density)
+    
+    #Population
+    hh_test_rmse_values[i] <- sqrt(mean((test_predictions$observed_hh_count - test_predictions$predicted_hh_count)^2))
+    hh_test_pearson_values[i] <- cor(test_predictions$observed_hh_count, test_predictions$predicted_hh_count)
+    hh_test_mae_values[i] <- mean(abs(test_predictions$observed_hh_count - test_predictions$predicted_hh_count))
+    hh_test_bias_values[i] <- mean(test_predictions$observed_hh_count - test_predictions$predicted_hh_count)
+    
+    # Append observed and predictions to results_df with fold information
+    fold_test_results <- data.frame(EA_CODE = test_predictions$EA_CODE, id = test_predictions$id, 
+                                    Total_Building_Count = test_predictions$google_v2_5,
+                                    folds = i, observed_density = test_predictions$observed_density, 
+                                    predicted_density = test_predictions$predicted_density, 
+                                    observed_hh_count = test_predictions$observed_hh_count, 
+                                    predicted_hh_count = test_predictions$predicted_hh_count)
+    
+    test_results_df <- rbind(test_results_df, fold_test_results)
+    
+    
+    # Train metrics
+    train_metrics <- data.frame(Model = "Model 3 - Random",
+                                dens_train_rmse = mean(dens_train_rmse_values),
+                                dens_train_corr = mean(dens_train_pearson_values),
+                                dens_train_mae = mean(dens_train_mae_values),
+                                dens_train_bias = mean(dens_train_bias_values),
+                                hh_train_rmse = mean(hh_train_rmse_values),
+                                hh_train_corr = mean(hh_train_pearson_values),
+                                hh_train_mae = mean(hh_train_mae_values),
+                                hh_train_bias = mean(hh_train_bias_values)
+                                
+    )
+    
+    # Test metrics
+    test_metrics <- data.frame(Model = "Model 3-Random",
+                               dens_test_rmse = mean(dens_test_rmse_values),
+                               dens_test_corr = mean(dens_test_pearson_values),
+                               dens_test_mae = mean(dens_test_mae_values),
+                               dens_test_bias = mean(dens_test_bias_values),
+                               hh_test_rmse = mean(hh_test_rmse_values),
+                               hh_test_corr = mean(hh_test_pearson_values),
+                               hh_test_mae = mean(hh_test_mae_values),
+                               hh_test_bias = mean(hh_test_bias_values)
+    )
+  }
+  
+  # Return separate lists for density and population metrics
+  list(train_metrics = train_metrics, test_metrics = test_metrics, 
+       train_results_df = train_results_df, test_results_df = test_results_df)
+}
+
+# Apply function
+result1 <- kfold_cv(data = EA_pop, k = 10)
+
+#Train data results
+result1$train_metrics %>%
+  kable()
+
+#Test data results
+result1$test_metrics %>%
+  kable()
+
+#Get test result as a dataframe and export to file
+test_result_df <- result1$test_results_df
+
+write.csv(test_result_df, paste0(output_path1, "Model3_Random_KFold_Test.csv"), row.names = F)
+
+#Get train result as a dataframe and export to file
+train_result_df <- result1$train_results_df
+
+write.csv(train_result_df, paste0(output_path1, "Model3_Random_KFold_Train.csv"), row.names = F)
+
+########################################################################################
+#######################################################################################
+
+# INLA Spatial CV Model 3-------------------------------------------------
+
+# function to calculate k-fold
+lgocv <- function(data, k) {
+  n <- nrow(data)
+  fold_size <- n %/% k
+  folds <- sample(rep(1:k, each = fold_size, length.out = n))
+  
+  # Create separate dataframes for train and test metrics
+  train_metrics <- data.frame()
+  test_metrics <- data.frame()
+  
+  # Place holder for train metrics calculation ----------------------------
+  
+  #density metrics
+  dens_train_rmse_values <- numeric(k) # Placeholder for RMSE
+  dens_train_pearson_values <- numeric(k) # Placeholder for corr
+  dens_train_mae_values <- numeric(k)  # Placeholder for MAE
+  dens_train_bias_values <- numeric(k)  # Placeholder for bias
+  
+  #HH metrics
+  hh_train_rmse_values <- numeric(k) # Placeholder for RMSE
+  hh_train_pearson_values <- numeric(k) # Placeholder for corr
+  hh_train_mae_values <- numeric(k)  # Placeholder for MAE
+  hh_train_bias_values <- numeric(k)  # Placeholder for bias
+  
+  
+  # Place holder for test metrics calculation -------------------------
+  
+  #Density metrics
+  dens_test_rmse_values <- numeric(k) # Placeholder for RMSE
+  dens_test_pearson_values <- numeric(k) # Placeholder for corr
+  dens_test_mae_values <- numeric(k)  # Placeholder for MAE
+  dens_test_bias_values <- numeric(k)  # Placeholder for bias
+  
+  #HH metrics
+  hh_test_rmse_values <- numeric(k) # Placeholder for RMSE
+  hh_test_pearson_values <- numeric(k) # Placeholder for corr
+  hh_test_mae_values <- numeric(k)  # Placeholder for MAE
+  hh_test_bias_values <- numeric(k)  # Placeholder for bias
+  
+  #Initialize data frame to store train values and predictions outside the loop
+  train_results_df <- data.frame(EA_CODE = numeric(),id = numeric(), Total_Building_Count = numeric(), 
+                                 folds = numeric(), observed_density = numeric(), 
+                                 predicted_density = numeric(), observed_hh_count = numeric(), 
+                                 predicted_hh_count =numeric())
+  
+  # Initialize data frame to store test values and predictions outside the loop
+  test_results_df <- data.frame(EA_CODE = numeric(), id = numeric(), Total_Building_Count = numeric(), 
+                                folds = numeric(), observed_density = numeric(), 
+                                predicted_density = numeric(), observed_hh_count = numeric(), 
+                                predicted_hh_count =numeric())
+  
+  # For loop for implementation ---------------------------------------------
+  for (i in 1:k) {
+    test_indices <- which(folds == i)
+    train_indices <- which(folds != i)
+    
+    train_data <- data[train_indices, ]
+    test_data <- data[test_indices, ]
+    
+    #tag train dataset
+    train_data <- train_data  %>%
+      mutate(observed_data = hh_density, dataset = "train")
+    
+    #tag test dataset
+    test_data <- test_data %>%
+      mutate(observed_data = NA, dataset = "test")
+    
+    #combine data
+    xval_data <- rbind(train_data, test_data)
+    
+    #print fold
+    print(paste("Processing fold", i, "out of", k))
+    
+    formula4 <- observed_data ~ x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61 +
+      Random_rural_urban(rural_urban_id, model = "iid", mapper = bru_mapper_index(n = rural_urban_group))+
+      Random_dist(dist_id, model = "iid", mapper = bru_mapper_index(n = dist_groups))+
+      Random_EA(id, model = "iid", mapper = bru_mapper_index(n = ea_groups))
+    
+    #fit model using a gamma distribution
+    mod2 <- bru(formula4,
+                data = xval_data,
+                family = "gamma", 
+                options = list(
+                  control.compute = list(waic = TRUE, cpo = TRUE, dic = TRUE),
+                  control.inla = list(int.strategy = "eb"),
+                  verbose = FALSE))
+    
+    #summary(mod2)
+    
+    #LGOCV
+    results <- inla.group.cv(mod2, num.level.sets = 3)
+    
+    #Mean predictions
+    cv <- data.frame(mean = results$mean)
+    
+    predictions <- cbind(xval_data, cv) %>%
+      as_tibble()
+    
+    
+    #Back transform the mean 
+    train_predictions  <- predictions %>%
+      filter(dataset == "train") %>%
+      mutate (predicted_density = exp(mean), 
+              predicted_hh_count = predicted_density * google_v2_5) %>%
+      rename(observed_hh_count = observed_hh_count, observed_density = hh_density)
+    
+    
+    #Train data metrics
+    #Density
+    dens_train_rmse_values[i] <- sqrt(mean((train_predictions$observed_density - train_predictions$predicted_density)^2))
+    dens_train_pearson_values[i] <- cor(train_predictions$observed_density, train_predictions$predicted_density)
+    dens_train_mae_values[i] <- mean(abs(train_predictions$observed_density - train_predictions$predicted_density))
+    dens_train_bias_values[i] <- mean(train_predictions$observed_density - train_predictions$predicted_density)
+    
+    #Population
+    hh_train_rmse_values[i] <- sqrt(mean((train_predictions$observed_hh_count - train_predictions$predicted_hh_count)^2))
+    hh_train_pearson_values[i] <- cor(train_predictions$observed_hh_count, train_predictions$predicted_hh_count)
+    hh_train_mae_values[i] <- mean(abs(train_predictions$observed_hh_count - train_predictions$predicted_hh_count))
+    hh_train_bias_values[i] <- mean(train_predictions$observed_hh_count - train_predictions$predicted_hh_count)
+    
+    # Append observed and predictions for TRAIN data
+    fold_train_results <- data.frame(EA_CODE = train_data$EA_CODE, id = train_predictions$id, 
+                                     Total_Building_Count = train_predictions$google_v2_5,
+                                     folds = i, observed_density = train_predictions$observed_density, 
+                                     predicted_density = train_predictions$predicted_density, 
+                                     observed_hh_count = train_predictions$observed_hh_count, 
+                                     predicted_hh_count = train_predictions$predicted_hh_count)
+    
+    train_results_df <- rbind(train_results_df, fold_train_results)
+    
+    #Test Predictions
+    
+    #Back transform the mean 
+    test_predictions  <- predictions %>%
+      filter(dataset == "test") %>%
+      mutate (predicted_density = exp(mean), 
+              predicted_hh_count = predicted_density * google_v2_5) %>%
+      rename(observed_hh_count = observed_hh_count, observed_density = hh_density)
+    
+    #Test data metrics
+    #Density
+    dens_test_rmse_values[i] <- sqrt(mean((test_predictions$observed_density - test_predictions$predicted_density)^2))
+    dens_test_pearson_values[i] <- cor(test_predictions$observed_density, test_predictions$predicted_density)
+    dens_test_mae_values[i] <- mean(abs(test_predictions$observed_density - test_predictions$predicted_density))
+    dens_test_bias_values[i] <- mean(test_predictions$observed_density - test_predictions$predicted_density)
+    
+    #Population
+    hh_test_rmse_values[i] <- sqrt(mean((test_predictions$observed_hh_count - test_predictions$predicted_hh_count)^2))
+    hh_test_pearson_values[i] <- cor(test_predictions$observed_hh_count, test_predictions$predicted_hh_count)
+    hh_test_mae_values[i] <- mean(abs(test_predictions$observed_hh_count - test_predictions$predicted_hh_count))
+    hh_test_bias_values[i] <- mean(test_predictions$observed_hh_count - test_predictions$predicted_hh_count)
+    
+    # Append observed and predictions to results_df with fold information
+    fold_test_results <- data.frame(EA_CODE = test_predictions$EA_CODE, id = test_predictions$id, 
+                                    Total_Building_Count = test_predictions$google_v2_5,
+                                    folds = i, observed_density = test_predictions$observed_density, 
+                                    predicted_density = test_predictions$predicted_density, 
+                                    observed_hh_count = test_predictions$observed_hh_count, 
+                                    predicted_hh_count = test_predictions$predicted_hh_count)
+    
+    test_results_df <- rbind(test_results_df, fold_test_results)
+    
+    
+    # Train metrics
+    train_metrics <- data.frame(Model = "Model 3-Spatial",
+                                dens_train_rmse = mean(dens_train_rmse_values),
+                                dens_train_corr = mean(dens_train_pearson_values),
+                                dens_train_mae = mean(dens_train_mae_values),
+                                dens_train_bias = mean(dens_train_bias_values),
+                                hh_train_rmse = mean(hh_train_rmse_values),
+                                hh_train_corr = mean(hh_train_pearson_values),
+                                hh_train_mae = mean(hh_train_mae_values),
+                                hh_train_bias = mean(hh_train_bias_values)
+    )
+    
+    # Test metrics
+    test_metrics <- data.frame(Model = "Model 3-Spatial",
+                               dens_test_rmse = mean(dens_test_rmse_values),
+                               dens_test_corr = mean(dens_test_pearson_values),
+                               dens_test_mae = mean(dens_test_mae_values),
+                               dens_test_bias = mean(dens_test_bias_values),
+                               hh_test_rmse = mean(hh_test_rmse_values),
+                               hh_test_corr = mean(hh_test_pearson_values),
+                               hh_test_mae = mean(hh_test_mae_values),
+                               hh_test_bias = mean(hh_test_bias_values)
+    )
+  }
+  
+  # Return separate lists for density and population metrics
+  list(train_metrics = train_metrics, test_metrics = test_metrics, 
+       train_results_df = train_results_df, test_results_df = test_results_df)
+  
+}
+
+# Apply function
+result2 <- lgocv(data = EA_pop, k = 10)
+
+#Train data results
+result2$train_metrics %>%
+  kable()
+
+#Test data results
+result2$test_metrics %>%
+  kable()
+
+#Get test result as a dataframe and export to file
+test_result_df <- result2$test_results_df
+
+write.csv(test_result_df, paste0(output_path1, "Model3_Spatial_KFold_Test.csv"), row.names = F)
+
+#Get train result as a dataframe and export to file
+train_result_df <- result2$train_results_df
+
+write.csv(train_result_df, paste0(output_path1, "Model3_Spatial_KFold_Train.csv"), row.names = F)
+
+###########################################################################################
+###########################################################################################
+
+# K-Fold Cross Validation for Model 4-------------------------------------------------
+
+# function to calculate k-fold
+kfold_cv <- function(data, k) {
+  n <- nrow(data)
+  fold_size <- n %/% k
+  folds <- sample(rep(1:k, each = fold_size, length.out = n))
+  
+  # Create separate dataframes for train and test metrics
+  train_metrics <- data.frame()
+  test_metrics <- data.frame()
+  
+  # Place holder for train metrics calculation ----------------------------
+  
+  #density metrics
+  dens_train_rmse_values <- numeric(k) # Placeholder for RMSE
+  dens_train_pearson_values <- numeric(k) # Placeholder for corr
+  dens_train_mae_values <- numeric(k)  # Placeholder for MAE
+  dens_train_bias_values <- numeric(k)  # Placeholder for bias
+  
+  #HH metrics
+  hh_train_rmse_values <- numeric(k) # Placeholder for RMSE
+  hh_train_pearson_values <- numeric(k) # Placeholder for corr
+  hh_train_mae_values <- numeric(k)  # Placeholder for MAE
+  hh_train_bias_values <- numeric(k)  # Placeholder for bias
+  
+  
+  # Place holder for test metrics calculation -------------------------
+  
+  #Density metrics
+  dens_test_rmse_values <- numeric(k) # Placeholder for RMSE
+  dens_test_pearson_values <- numeric(k) # Placeholder for corr
+  dens_test_mae_values <- numeric(k)  # Placeholder for MAE
+  dens_test_bias_values <- numeric(k)  # Placeholder for bias
+  
+  #HH metrics
+  hh_test_rmse_values <- numeric(k) # Placeholder for RMSE
+  hh_test_pearson_values <- numeric(k) # Placeholder for corr
+  hh_test_mae_values <- numeric(k)  # Placeholder for MAE
+  hh_test_bias_values <- numeric(k)  # Placeholder for bias
+  
+  #Initialize data frame to store train values and predictions outside the loop
+  train_results_df <- data.frame(EA_CODE = numeric(),id = numeric(), Total_Building_Count = numeric(), 
+                                 folds = numeric(), observed_density = numeric(), 
+                                 predicted_density = numeric(), observed_hh_count = numeric(), 
+                                 predicted_hh_count =numeric())
+  
+  # Initialize data frame to store test values and predictions outside the loop
+  test_results_df <- data.frame(EA_CODE = numeric(), id = numeric(), Total_Building_Count = numeric(), 
+                                folds = numeric(), observed_density = numeric(), 
+                                predicted_density = numeric(), observed_hh_count = numeric(), 
+                                predicted_hh_count =numeric())
+  
+  # For loop for implementation ---------------------------------------------
+  for (i in 1:k) {
+    test_indices <- which(folds == i)
+    train_indices <- which(folds != i)
+    
+    train_data <- data[train_indices, ]
+    test_data <- data[test_indices, ]
+    
+    #create a new cluster id for the train data
+    train_data <- train_data %>%
+      rowid_to_column("idx")
+    
+    # #get distinct count of idx
+    train_id_groups <- train_data %>%
+      distinct(idx) %>%
+      nrow()
+    
+    #create a new idx in test data for evaluation
+    test_data <- test_data %>%
+      mutate(idx = (train_id_groups+1) : (train_id_groups + nrow(test_data)))
+    
+    print(paste("Processing fold", i, "out of", k))
+    
+    #-Define the coordinates of centroids
+    coords <- cbind(train_data$long, train_data$lat) 
+    
+    #measure distance between coordinates
+    summary(dist(coords)) #summarizes the Euclidean distance between points in the spatial domain
+    
+    
+    #build non-convex hull mesh
+    non_convex_bdry <- inla.nonconvex.hull(coords, -0.03, -0.05, resolution = c(100, 100))
+    mesh <- fm_mesh_2d_inla(boundary = non_convex_bdry, max.edge=c(0.1, 1), 
+                            offset = c(0.05, 1),
+                            cutoff = 0.003)
+    
+    #Build the SPDE
+    spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)
+    
+    #Model formula
+    formula4 <- hh_density ~  x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61 +
+      Random_rural_urban(rural_urban_id, model = "iid", mapper = bru_mapper_index(n = rural_urban_group))+
+      Random_dist(dist_id, model = "iid", mapper = bru_mapper_index(n = dist_groups))+
+      Random_EA(idx, model = "iid", mapper = bru_mapper_index(n = train_id_groups))+
+      Random_Spat(main = coords, model = spde)
+    
+    #fit model using a gamma distribution
+    mod2 <- bru(formula4,
+                data = train_data,
+                family = "gamma", 
+                options = list(
+                  control.compute = list(waic = TRUE, cpo = TRUE, dic = TRUE),
+                  control.inla = list(int.strategy = "eb"),
+                  verbose = FALSE))
+    
+    #summary(mod2)
+    
+    #Make Predictions for train data
+    train_predictions <- predict(mod2, newdata = train_data, formula = ~ Intercept + 
+                                   x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61 +
+                                   Random_rural_urban_eval(rural_urban_id)+
+                                   Random_EA_eval(idx)+
+                                   Random_dist_eval(dist_id)+
+                                   Random_Spat_eval(cbind(long, lat)),
+                                 n.samples = 100, 
+                                 seed = 2)
+    
+    #Back transform the mean 
+    train_predictions  <- train_predictions %>%
+      mutate (predicted_density = exp(mean), 
+              predicted_hh_count = predicted_density * google_v2_5) %>%
+      rename(observed_hh_count = observed_hh_count, observed_density = hh_density)
+    
+    
+    #Train data metrics
+    #Density
+    dens_train_rmse_values[i] <- sqrt(mean((train_predictions$observed_density - train_predictions$predicted_density)^2))
+    dens_train_pearson_values[i] <- cor(train_predictions$observed_density, train_predictions$predicted_density)
+    dens_train_mae_values[i] <- mean(abs(train_predictions$observed_density - train_predictions$predicted_density))
+    dens_train_bias_values[i] <- mean(train_predictions$observed_density - train_predictions$predicted_density)
+    
+    #Population
+    hh_train_rmse_values[i] <- sqrt(mean((train_predictions$observed_hh_count - train_predictions$predicted_hh_count)^2))
+    hh_train_pearson_values[i] <- cor(train_predictions$observed_hh_count, train_predictions$predicted_hh_count)
+    hh_train_mae_values[i] <- mean(abs(train_predictions$observed_hh_count - train_predictions$predicted_hh_count))
+    hh_train_bias_values[i] <- mean(train_predictions$observed_hh_count - train_predictions$predicted_hh_count)
+    
+    # Append observed and predictions for TRAIN data
+    fold_train_results <- data.frame(EA_CODE = train_data$EA_CODE, id = train_predictions$id, 
+                                     Total_Building_Count = train_predictions$google_v2_5,
+                                     folds = i, observed_density = train_predictions$observed_density, 
+                                     predicted_density = train_predictions$predicted_density, 
+                                     observed_hh_count = train_predictions$observed_hh_count, 
+                                     predicted_hh_count = train_predictions$predicted_hh_count)
+    
+    train_results_df <- rbind(train_results_df, fold_train_results)
+    
+    # Make Predictions for Test Data ------------------------------------------
+    
+    #Make Predictions for test data
+    test_predictions <- predict(mod2, newdata = test_data, formula = ~ Intercept + 
+                                  x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61 +
+                                  Random_rural_urban_eval(rural_urban_id)+
+                                  Random_EA_eval(idx)+
+                                  Random_dist_eval(dist_id)+
+                                  Random_Spat_eval(cbind(long, lat)),
+                                n.samples = 100, 
+                                seed = 2)
+    
+    #Back transform the mean 
+    test_predictions  <- test_predictions %>%
+      mutate (predicted_density = exp(mean), 
+              predicted_hh_count = predicted_density * google_v2_5) %>%
+      rename(observed_hh_count = observed_hh_count, observed_density = hh_density)
+    
+    #Test data metrics
+    #Density
+    dens_test_rmse_values[i] <- sqrt(mean((test_predictions$observed_density - test_predictions$predicted_density)^2))
+    dens_test_pearson_values[i] <- cor(test_predictions$observed_density, test_predictions$predicted_density)
+    dens_test_mae_values[i] <- mean(abs(test_predictions$observed_density - test_predictions$predicted_density))
+    dens_test_bias_values[i] <- mean(test_predictions$observed_density - test_predictions$predicted_density)
+    
+    #Population
+    hh_test_rmse_values[i] <- sqrt(mean((test_predictions$observed_hh_count - test_predictions$predicted_hh_count)^2))
+    hh_test_pearson_values[i] <- cor(test_predictions$observed_hh_count, test_predictions$predicted_hh_count)
+    hh_test_mae_values[i] <- mean(abs(test_predictions$observed_hh_count - test_predictions$predicted_hh_count))
+    hh_test_bias_values[i] <- mean(test_predictions$observed_hh_count - test_predictions$predicted_hh_count)
+    
+    # Append observed and predictions to results_df with fold information
+    fold_test_results <- data.frame(EA_CODE = test_predictions$EA_CODE, id = test_predictions$id, 
+                                    Total_Building_Count = test_predictions$google_v2_5,
+                                    folds = i, observed_density = test_predictions$observed_density, 
+                                    predicted_density = test_predictions$predicted_density, 
+                                    observed_hh_count = test_predictions$observed_hh_count, 
+                                    predicted_hh_count = test_predictions$predicted_hh_count)
+    
+    test_results_df <- rbind(test_results_df, fold_test_results)
+    
+    # Train metrics
+    train_metrics <- data.frame(Model = "Model 4 - Random",
+                                dens_train_rmse = mean(dens_train_rmse_values),
+                                dens_train_corr = mean(dens_train_pearson_values),
+                                dens_train_mae = mean(dens_train_mae_values),
+                                dens_train_bias = mean(dens_train_bias_values),
+                                hh_train_rmse = mean(hh_train_rmse_values),
+                                hh_train_corr = mean(hh_train_pearson_values),
+                                hh_train_mae = mean(hh_train_mae_values),
+                                hh_train_bias = mean(hh_train_bias_values)
+                                
+    )
+    
+    # Test metrics
+    test_metrics <- data.frame(Model = "Model 4 - Random",
+                               dens_test_rmse = mean(dens_test_rmse_values),
+                               dens_test_corr = mean(dens_test_pearson_values),
+                               dens_test_mae = mean(dens_test_mae_values),
+                               dens_test_bias = mean(dens_test_bias_values),
+                               hh_test_rmse = mean(hh_test_rmse_values),
+                               hh_test_corr = mean(hh_test_pearson_values),
+                               hh_test_mae = mean(hh_test_mae_values),
+                               hh_test_bias = mean(hh_test_bias_values)
+    )
+  }
+  
+  # Return separate lists for density and population metrics
+  list(train_metrics = train_metrics, test_metrics = test_metrics, 
+       train_results_df = train_results_df, test_results_df = test_results_df)
+}
+
+# Apply function
+result3 <- kfold_cv(data = EA_pop, k = 10)
+
+#Train data results
+result3$train_metrics %>%
+  kable()
+
+#Test data results
+result3$test_metrics %>%
+  kable()
+
+#Get test result as a dataframe and export to file
+test_result_df <- result3$test_results_df
+
+write.csv(test_result_df, paste0(output_path1, "Model4_Random_KFold_Test.csv"), row.names = F)
+
+#Get train result as a dataframe and export to file
+train_result_df <- result3$train_results_df
+
+write.csv(train_result_df, paste0(output_path1, "Model4_Random_KFold_Train.csv"), row.names = F)
+
+############################################################################################
+############################################################################################
+# INLA Spatial CV Model 4-------------------------------------------------
+
+# function to calculate k-fold
+lgocv <- function(data, k) {
+  n <- nrow(data)
+  fold_size <- n %/% k
+  folds <- sample(rep(1:k, each = fold_size, length.out = n))
+  
+  # Create separate dataframes for train and test metrics
+  train_metrics <- data.frame()
+  test_metrics <- data.frame()
+  
+  # Place holder for train metrics calculation ----------------------------
+  
+  #density metrics
+  dens_train_rmse_values <- numeric(k) # Placeholder for RMSE
+  dens_train_pearson_values <- numeric(k) # Placeholder for corr
+  dens_train_mae_values <- numeric(k)  # Placeholder for MAE
+  dens_train_bias_values <- numeric(k)  # Placeholder for bias
+  
+  #HH metrics
+  hh_train_rmse_values <- numeric(k) # Placeholder for RMSE
+  hh_train_pearson_values <- numeric(k) # Placeholder for corr
+  hh_train_mae_values <- numeric(k)  # Placeholder for MAE
+  hh_train_bias_values <- numeric(k)  # Placeholder for bias
+  
+  
+  # Place holder for test metrics calculation -------------------------
+  
+  #Density metrics
+  dens_test_rmse_values <- numeric(k) # Placeholder for RMSE
+  dens_test_pearson_values <- numeric(k) # Placeholder for corr
+  dens_test_mae_values <- numeric(k)  # Placeholder for MAE
+  dens_test_bias_values <- numeric(k)  # Placeholder for bias
+  
+  #HH metrics
+  hh_test_rmse_values <- numeric(k) # Placeholder for RMSE
+  hh_test_pearson_values <- numeric(k) # Placeholder for corr
+  hh_test_mae_values <- numeric(k)  # Placeholder for MAE
+  hh_test_bias_values <- numeric(k)  # Placeholder for bias
+  
+  #Initialize data frame to store train values and predictions outside the loop
+  train_results_df <- data.frame(EA_CODE = numeric(),id = numeric(), Total_Building_Count = numeric(), 
+                                 folds = numeric(), observed_density = numeric(), 
+                                 predicted_density = numeric(), observed_hh_count = numeric(), 
+                                 predicted_hh_count =numeric())
+  
+  # Initialize data frame to store test values and predictions outside the loop
+  test_results_df <- data.frame(EA_CODE = numeric(), id = numeric(), Total_Building_Count = numeric(), 
+                                folds = numeric(), observed_density = numeric(), 
+                                predicted_density = numeric(), observed_hh_count = numeric(), 
+                                predicted_hh_count =numeric())
+  
+  # For loop for implementation ---------------------------------------------
+  for (i in 1:k) {
+    test_indices <- which(folds == i)
+    train_indices <- which(folds != i)
+    
+    train_data <- data[train_indices, ]
+    test_data <- data[test_indices, ]
+    
+    #tag train dataset
+    train_data <- train_data  %>%
+      mutate(observed_data = hh_density, dataset = "train")
+    
+    #tag test dataset
+    test_data <- test_data %>%
+      mutate(observed_data = NA, dataset = "test")
+    
+    #combine data
+    xval_data <- rbind(train_data, test_data)
+    
+    #-Define the coordinates of centroids
+    coords <- cbind(xval_data$long, xval_data$lat) 
+    
+    #measure distance between coordinates
+    summary(dist(coords)) #summarizes the Euclidean distance between points in the spatial domain
+    
+    
+    #build non-convex hull mesh
+    non_convex_bdry <- inla.nonconvex.hull(coords, -0.03, -0.05, resolution = c(100, 100))
+    mesh <- fm_mesh_2d_inla(boundary = non_convex_bdry, max.edge=c(0.1, 1), 
+                            offset = c(0.05, 1),
+                            cutoff = 0.003)
+    
+    #Build the SPDE
+    spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)
+    
+    #print fold
+    print(paste("Processing fold", i, "out of", k))
+    
+    formula4 <- observed_data ~ x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61 +
+      Random_rural_urban(rural_urban_id, model = "iid", mapper = bru_mapper_index(n = rural_urban_group))+
+      Random_dist(dist_id, model = "iid", mapper = bru_mapper_index(n = dist_groups))+
+      Random_EA(id, model = "iid", mapper = bru_mapper_index(n = ea_groups))+
+      Random_Spat(main = coords, model = spde)
+    
+    #fit model using a gamma distribution
+    mod2 <- bru(formula4,
+                data = xval_data,
+                family = "gamma", 
+                options = list(
+                  control.compute = list(waic = TRUE, cpo = TRUE, dic = TRUE),
+                  control.inla = list(int.strategy = "eb"),
+                  verbose = FALSE))
+    
+    #summary(mod2)
+    
+    #LGOCV
+    results <- inla.group.cv(mod2, num.level.sets = 3)
+    
+    #Mean predictions
+    cv <- data.frame(mean = results$mean)
+    
+    predictions <- cbind(xval_data, cv) %>%
+      as_tibble()
+    
+    
+    #Back transform the mean 
+    train_predictions  <- predictions %>%
+      filter(dataset == "train") %>%
+      mutate (predicted_density = exp(mean), 
+              predicted_hh_count = predicted_density * google_v2_5) %>%
+      rename(observed_hh_count = observed_hh_count, observed_density = hh_density)
+    
+    
+    #Train data metrics
+    #Density
+    dens_train_rmse_values[i] <- sqrt(mean((train_predictions$observed_density - train_predictions$predicted_density)^2))
+    dens_train_pearson_values[i] <- cor(train_predictions$observed_density, train_predictions$predicted_density)
+    dens_train_mae_values[i] <- mean(abs(train_predictions$observed_density - train_predictions$predicted_density))
+    dens_train_bias_values[i] <- mean(train_predictions$observed_density - train_predictions$predicted_density)
+    
+    #Population
+    hh_train_rmse_values[i] <- sqrt(mean((train_predictions$observed_hh_count - train_predictions$predicted_hh_count)^2))
+    hh_train_pearson_values[i] <- cor(train_predictions$observed_hh_count, train_predictions$predicted_hh_count)
+    hh_train_mae_values[i] <- mean(abs(train_predictions$observed_hh_count - train_predictions$predicted_hh_count))
+    hh_train_bias_values[i] <- mean(train_predictions$observed_hh_count - train_predictions$predicted_hh_count)
+    
+    # Append observed and predictions for TRAIN data
+    fold_train_results <- data.frame(EA_CODE = train_data$EA_CODE, id = train_predictions$id, 
+                                     Total_Building_Count = train_predictions$google_v2_5,
+                                     folds = i, observed_density = train_predictions$observed_density, 
+                                     predicted_density = train_predictions$predicted_density, 
+                                     observed_hh_count = train_predictions$observed_hh_count, 
+                                     predicted_hh_count = train_predictions$predicted_hh_count)
+    
+    train_results_df <- rbind(train_results_df, fold_train_results)
+    
+    #Test Predictions
+    
+    #Back transform the mean 
+    test_predictions  <- predictions %>%
+      filter(dataset == "test") %>%
+      mutate (predicted_density = exp(mean), 
+              predicted_hh_count = predicted_density * google_v2_5) %>%
+      rename(observed_hh_count = observed_hh_count, observed_density = hh_density)
+    
+    #Test data metrics
+    #Density
+    dens_test_rmse_values[i] <- sqrt(mean((test_predictions$observed_density - test_predictions$predicted_density)^2))
+    dens_test_pearson_values[i] <- cor(test_predictions$observed_density, test_predictions$predicted_density)
+    dens_test_mae_values[i] <- mean(abs(test_predictions$observed_density - test_predictions$predicted_density))
+    dens_test_bias_values[i] <- mean(test_predictions$observed_density - test_predictions$predicted_density)
+    
+    #Population
+    hh_test_rmse_values[i] <- sqrt(mean((test_predictions$observed_hh_count - test_predictions$predicted_hh_count)^2))
+    hh_test_pearson_values[i] <- cor(test_predictions$observed_hh_count, test_predictions$predicted_hh_count)
+    hh_test_mae_values[i] <- mean(abs(test_predictions$observed_hh_count - test_predictions$predicted_hh_count))
+    hh_test_bias_values[i] <- mean(test_predictions$observed_hh_count - test_predictions$predicted_hh_count)
+    
+    # Append observed and predictions to results_df with fold information
+    fold_test_results <- data.frame(EA_CODE = test_predictions$EA_CODE, id = test_predictions$id, 
+                                    Total_Building_Count = test_predictions$google_v2_5,
+                                    folds = i, observed_density = test_predictions$observed_density, 
+                                    predicted_density = test_predictions$predicted_density, 
+                                    observed_hh_count = test_predictions$observed_hh_count, 
+                                    predicted_hh_count = test_predictions$predicted_hh_count)
+    
+    test_results_df <- rbind(test_results_df, fold_test_results)
+    
+    # Train metrics
+    train_metrics <- data.frame(Model = "Model 4 - Spatial",
+                                dens_train_rmse = mean(dens_train_rmse_values),
+                                dens_train_corr = mean(dens_train_pearson_values),
+                                dens_train_mae = mean(dens_train_mae_values),
+                                dens_train_bias = mean(dens_train_bias_values),
+                                hh_train_rmse = mean(hh_train_rmse_values),
+                                hh_train_corr = mean(hh_train_pearson_values),
+                                hh_train_mae = mean(hh_train_mae_values),
+                                hh_train_bias = mean(hh_train_bias_values)
+                                
+    )
+    
+    # Test metrics
+    test_metrics <- data.frame(Model = "Model 4 - Spatial",
+                               dens_test_rmse = mean(dens_test_rmse_values),
+                               dens_test_corr = mean(dens_test_pearson_values),
+                               dens_test_mae = mean(dens_test_mae_values),
+                               dens_test_bias = mean(dens_test_bias_values),
+                               hh_test_rmse = mean(hh_test_rmse_values),
+                               hh_test_corr = mean(hh_test_pearson_values),
+                               hh_test_mae = mean(hh_test_mae_values),
+                               hh_test_bias = mean(hh_test_bias_values)
+    )
+  }
+  
+  # Return separate lists for density and population metrics
+  list(train_metrics = train_metrics, test_metrics = test_metrics, 
+       train_results_df = train_results_df, test_results_df = test_results_df)
+}
+
+# Apply function
+result4 <- lgocv(data = EA_pop, k = 10)
+
+#Train data results
+result4$train_metrics %>%
+  kable()
+
+#Test data results
+result4$test_metrics %>%
+  kable()
+
+#Get test result as a dataframe and export to file
+test_result_df <- result4$test_results_df
+
+write.csv(test_result_df, paste0(output_path1, "Model4_Random_KFold_Test.csv"), row.names = F)
+
+#Get train result as a dataframe and export to file
+train_result_df <- result4$train_results_df
+
+write.csv(train_result_df, paste0(output_path1, "Model4_Random_KFold_Train.csv"), row.names = F)
+
+#################################################################
+# Compare all Kfolds
+
+kfold1 <- rbind(result1$train_metrics, result2$train_metrics, 
+                result3$train_metrics, result4$train_metrics) %>% kable()
+kfold1
+
+kfold2 <- rbind(result1$test_metrics, result2$test_metrics, 
+                result3$test_metrics, result4$test_metrics) %>% kable()
+kfold2
+
+
+#########################################################################################################
+#########################################################################################################
+################## HOUSEHOLD COUNT PREDICTIONS ##########################################################
+
+#load covariates
+pred_covs <-  read_feather(paste0(input_path, "Malawi_covs_stack_2024.feather"))
+r1 <- rast(paste0(input_path, "country_raster.tif"))
+
+
+# Check for NAs in covariates ---------------------------------------------
+
+# Function to count NAs in covariates starting with 'x'
+count_nas <- function(data) {
+  # Get the names of the covariates starting with 'x'
+  covariates <- names(data)[grepl("^x", names(data))]
+  
+  # Loop through each covariate and count NAs
+  for (covariate in covariates) {
+    na_count <- sum(is.na(data[[covariate]]))
+    cat("Number of NAs in", covariate, ":", na_count, "\n")
+  }
+}
+
+# Call the function
+count_nas(pred_covs)
+
+#--Standardize covariates
+vars <- pred_covs %>%
+  select(starts_with("x"))%>%
+  names()
+
+pred_covs[, vars] <- apply(pred_covs[,vars], 2, stdize)
+
+#Get mean and standard devaition from cov_stats
+#means <- setNames(cov_stats$Mean, cov_stats$Covariate)
+#sds   <- setNames(cov_stats$Std_Dev, cov_stats$Covariate)
+
+# Apply z-score standardization using the means and sds
+#pred_covs <- pred_covs %>%
+#mutate(across(all_of(vars), ~ (. - means[cur_column()]) / sds[cur_column()]))
+
+#check scaled covariates
+head(pred_covs)
+
+#Replace NAs with 0 to avoid numerical issues
+pred_covs <- pred_covs %>%
+  mutate_at(vars(starts_with("x")), ~replace(., is.na(.), 0))
+
+#######################################################################################
+######################### MAKE PREDICTIONS FOR HH COUNT MODELS ########################
+
+# Model 1 Predictions  --------------------------------------------------------
+# Fixed Effect + Urban_Rural_Random_Effect
+
+#Use the generate function to make predictions
+mu <- generate(mod1_count, newdata = pred_covs, formula = ~ Intercept +
+                 x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61  + 
+                 Random_rural_urban_eval(rural_urban_id),
+               n.samples = 100, 
+               seed = 2,
+               num.threads = "1" )
+
+#Back transform mu
+predicted_density <- exp(mu) %>%
+  as_tibble()
+
+#Add building count for each grid
+predicted_density <- predicted_density %>%
+  mutate(bcount = pred_covs$bcount)
+
+#Estimate predicted hh count
+predicted_hh_count1 <- predicted_density %>%
+  mutate_at(vars(starts_with("v")), ~ . * bcount) %>%
+  select(-bcount)
+
+#Total Predicted hh count and Uncertainty
+
+hh_model1 <- predicted_hh_count1 %>%
+  apply(2, sum, na.rm = T) %>%
+  as_tibble()%>%
+  summarise(mean_hh_count = round(mean(value)),
+            upper_quantile = round(quantile(value, probs=0.975)),
+            lower_quantile = round(quantile(value, probs =0.025)))
+
+hh_model1 %>% kable()
+
+# District HH Estimates ---------------------------------------------
+
+district_names <- pred_covs %>%
+  select(DIST_NAME)
+
+#cbind district to data
+district_estimates <- cbind(predicted_hh_count1, district_names) %>%
+  as_tibble()
+
+#Group by district and split data according to district
+district_estimates <- district_estimates %>%
+  group_by(DIST_NAME) %>%
+  group_split()
+
+
+#for loop to get CI for each admin
+OUT <- list()
+for(dd in 1:length(district_estimates)){
+  
+  df <- district_estimates[[dd]]
+  
+  # get the ID of the current area being processed
+  typro <- unique(df$DIST_NAME)
+  print(typro)
+  
+  
+  df <- df %>%
+    select(starts_with("v")) %>%
+    apply(2, sum, na.rm = T)  
+  
+  OUT[[dd]] <- c(district_names = typro, mean = mean(df),
+                 lower_quantile = quantile(df, 0.025),
+                 upper_quantile = quantile(df, 0.975),
+                 median = quantile(df, 0.500))
+  
+  #print(OUT)
+}
+
+AA <- do.call(rbind, OUT)
+AA
+
+#Convert to tibble and export as a csv
+district_hh_count <- AA %>%
+  as_tibble() %>%
+  rename(DIST_NAME = district_names, Estimated_Count = mean, 
+         Lower_Count = "lower_quantile.2.5%" ,
+         Median_Count = "median.50%", 
+         Upper_Count = "upper_quantile.97.5%")
+
+#Write to file
+
+# Summarize pixel level predictions ---------------------------------------
+
+#Summarize predictions
+tic() 
+
+mean_count <- rowMeans(predicted_hh_count1, na.rm = T)
+median_count <- apply(predicted_hh_count1, 1, FUN = function(x) quantile(x, probs = 0.5, na.rm = T))
+std_count <- apply(predicted_hh_count1, 1, sd)
+lower_quantile <- apply(predicted_hh_count1, 1, FUN = function(x) quantile(x, probs = 0.025, na.rm=T))
+upper_quantile <- apply(predicted_hh_count1, 1, FUN = function(x) quantile(x, probs = 0.975, na.rm = T))
+uncertainty = (upper_quantile - lower_quantile)/mean_count
+coe_var = std_count/mean_count
+
+toc()
+
+#sum predictions
+sum(median_count, na.rm = T)
+sum(mean_count, na.rm = T)
+
+#Cbind predictions to xy coord
+
+pixel_predictions1 <- cbind(mean_count, median_count, std_count,
+                            lower_quantile, upper_quantile, uncertainty, coe_var) %>%
+  as_tibble() %>%
+  mutate(long = pred_covs$long, lat = pred_covs$lat,
+         bcount = pred_covs$bcount,
+         hh_density = mean_count/bcount)
+
+summary(pixel_predictions1$mean_count)
+summary(pixel_predictions1$hh_density)
+
+###############################################################################
+# Model 2 Predictions  --------------------------------------------------------
+#Model 2 - Fixed Effect + Urban_Rural_Random_Effect + Dist_Random_Effect
+
+#Use the generate function to make predictions
+mu <- generate(mod2_count, newdata = pred_covs, formula = ~ Intercept +
+                 x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61  +
+                 Random_rural_urban_eval(rural_urban_id)+
+                 Random_dist_eval(dist_id), 
+               n.samples = 100, 
+               seed = 2,
+               num.threads = "1" )
+
+
+#Back transform mu
+predicted_density <- exp(mu) %>%
+  as_tibble()
+
+#Add building count for each grid
+predicted_density <- predicted_density %>%
+  mutate(bcount = pred_covs$bcount)
+
+#Estimate HH Count
+predicted_hh_count2 <- predicted_density %>%
+  mutate_at(vars(starts_with("v")), ~ . * bcount) %>%
+  select(-bcount)
+
+#Total Predicted hh count and Uncertainty
+
+hh_model2 <- predicted_hh_count2 %>%
+  apply(2, sum, na.rm = T) %>%
+  as_tibble()%>%
+  summarise(mean_hh_count = round(mean(value)),
+            upper_quantile = round(quantile(value, probs=0.975)),
+            lower_quantile = round(quantile(value, probs =0.025)))
+
+hh_model2 %>% kable()
+
+# District HH Estimates ---------------------------------------------
+
+district_names <- pred_covs %>%
+  select(DIST_NAME)
+
+#cbind district to data
+district_estimates <- cbind(predicted_hh_count2, district_names) %>%
+  as_tibble()
+
+#Group by district and split data according to district
+district_estimates <- district_estimates %>%
+  group_by(DIST_NAME) %>%
+  group_split()
+
+
+#for loop to get CI for each admin
+OUT <- list()
+for(dd in 1:length(district_estimates)){
+  
+  df <- district_estimates[[dd]]
+  
+  # get the ID of the current area being processed
+  typro <- unique(df$DIST_NAME)
+  print(typro)
+  
+  
+  df <- df %>%
+    select(starts_with("v")) %>%
+    apply(2, sum, na.rm = T)  
+  
+  OUT[[dd]] <- c(district_names = typro, mean = mean(df),
+                 lower_quantile = quantile(df, 0.025),
+                 upper_quantile = quantile(df, 0.975),
+                 median = quantile(df, 0.500))
+  
+  #print(OUT)
+}
+
+AA <- do.call(rbind, OUT)
+AA
+
+#Convert to tibble and export as a csv
+district_hh_count <- AA %>%
+  as_tibble() %>%
+  rename(DIST_NAME = district_names, Estimated_Count = mean, 
+         Lower_Count = "lower_quantile.2.5%" ,
+         Median_Count = "median.50%", 
+         Upper_Count = "upper_quantile.97.5%")
+
+#Write to file
+
+# Summarize pixel level predictions ---------------------------------------
+
+#Summarize predictions
+tic() 
+
+mean_count <- rowMeans(predicted_hh_count2, na.rm = T)
+median_count <- apply(predicted_hh_count2, 1, FUN = function(x) quantile(x, probs = 0.5, na.rm = T))
+std_count <- apply(predicted_hh_count2, 1, sd)
+lower_quantile <- apply(predicted_hh_count2, 1, FUN = function(x) quantile(x, probs = 0.025, na.rm=T))
+upper_quantile <- apply(predicted_hh_count2, 1, FUN = function(x) quantile(x, probs = 0.975, na.rm = T))
+uncertainty = (upper_quantile - lower_quantile)/mean_count
+coe_var = std_count/mean_count
+
+toc()
+
+#sum predictions
+sum(median_count, na.rm = T)
+sum(mean_count, na.rm = T)
+
+#Cbind predictions to xy coord
+
+pixel_predictions2 <- cbind(mean_count, median_count, std_count,
+                            lower_quantile, upper_quantile, uncertainty, coe_var) %>%
+  as_tibble() %>%
+  mutate(long = pred_covs$long, lat = pred_covs$lat,
+         bcount = pred_covs$bcount,
+         hh_density = mean_count/bcount)
+
+summary(pixel_predictions2$mean_count)
+summary(pixel_predictions2$hh_density)
+
+###############################################################################
+# Model 3 Predictions  --------------------------------------------------------
+#Model 3 - Fixed Effect + Urban_Rural_Random_Effect + Dist_Random_Effect + EA Random_Effect
+
+#Use the generate function to make predictions
+mu <- generate(mod3_count, newdata = pred_covs, formula = ~ Intercept +
+                 x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61  + 
+                 Random_rural_urban_eval(rural_urban_id)+
+                 Random_dist_eval(dist_id), 
+               n.samples = 100, 
+               seed = 2,
+               num.threads = "1" )
+
+#Get iid random effect for EA id
+n.samples = 100
+
+iid.sd <- sqrt(1 / mod3_count$summary.hyperpar["Precision for Random_EA",1])
+Random_EA_eval <- matrix(rnorm(nrow(pred_covs)*n.samples, 0, iid.sd),
+                         nrow = nrow(pred_covs),
+                         ncol = n.samples)
+
+#Add random effect to data
+mu <- mu + Random_EA_eval
+
+
+#Back transform mu
+predicted_density <- exp(mu) %>%
+  as_tibble()
+
+#Add building count for each grid
+predicted_density <- predicted_density %>%
+  mutate(bcount = pred_covs$bcount)
+
+#Estimate predicted population
+predicted_hh_count3 <- predicted_density %>%
+  mutate_at(vars(starts_with("v")), ~ . * bcount) %>%
+  select(-bcount)
+
+#Total Predicted hh count and Uncertainty
+
+hh_model3 <- predicted_hh_count3 %>%
+  apply(2, sum, na.rm = T) %>%
+  as_tibble()%>%
+  summarise(mean_hh_count = round(mean(value)),
+            upper_quantile = round(quantile(value, probs=0.975)),
+            lower_quantile = round(quantile(value, probs =0.025)))
+
+hh_model3 %>% kable()
+
+# District HH Estimates ---------------------------------------------
+
+district_names <- pred_covs %>%
+  select(DIST_NAME)
+
+#cbind district to data
+district_estimates <- cbind(predicted_hh_count3, district_names) %>%
+  as_tibble()
+
+#Group by district and split data according to district
+district_estimates <- district_estimates %>%
+  group_by(DIST_NAME) %>%
+  group_split()
+
+
+#for loop to get CI for each admin
+OUT <- list()
+for(dd in 1:length(district_estimates)){
+  
+  df <- district_estimates[[dd]]
+  
+  # get the ID of the current area being processed
+  typro <- unique(df$DIST_NAME)
+  print(typro)
+  
+  
+  df <- df %>%
+    select(starts_with("v")) %>%
+    apply(2, sum, na.rm = T)  
+  
+  OUT[[dd]] <- c(district_names = typro, mean = mean(df),
+                 lower_quantile = quantile(df, 0.025),
+                 upper_quantile = quantile(df, 0.975),
+                 median = quantile(df, 0.500))
+  
+  #print(OUT)
+}
+
+AA <- do.call(rbind, OUT)
+AA
+
+#Convert to tibble and export as a csv
+district_hh_count <- AA %>%
+  as_tibble() %>%
+  rename(DIST_NAME = district_names, Estimated_Count = mean, 
+         Lower_Count = "lower_quantile.2.5%" ,
+         Median_Count = "median.50%", 
+         Upper_Count = "upper_quantile.97.5%")
+
+#Write to file
+write.csv(district_hh_count, paste0(output_path1, "model3_district_hh_count.csv"), row.names = F)
+
+# Summarize pixel level predictions ---------------------------------------
+
+#Summarize predictions
+tic() 
+
+mean_count <- rowMeans(predicted_hh_count3, na.rm = T)
+median_count <- apply(predicted_hh_count3, 1, FUN = function(x) quantile(x, probs = 0.5, na.rm = T))
+std_count <- apply(predicted_hh_count3, 1, sd)
+lower_quantile <- apply(predicted_hh_count3, 1, FUN = function(x) quantile(x, probs = 0.025, na.rm=T))
+upper_quantile <- apply(predicted_hh_count3, 1, FUN = function(x) quantile(x, probs = 0.975, na.rm = T))
+uncertainty = (upper_quantile - lower_quantile)/mean_count
+coe_var = std_count/mean_count
+
+toc()
+
+#sum predictions
+sum(median_count, na.rm = T)
+sum(mean_count, na.rm = T)
+
+#Cbind predictions to xy coord
+
+pixel_predictions3 <- cbind(mean_count, median_count, std_count,
+                            lower_quantile, upper_quantile, uncertainty, coe_var) %>%
+  as_tibble() %>%
+  mutate(long = pred_covs$long, lat = pred_covs$lat,
+         bcount = pred_covs$bcount,
+         hh_density = mean_count/bcount)
+
+summary(pixel_predictions3$mean_count)
+summary(pixel_predictions3$hh_density)
+
+
+###############################################################################
+# Model 4 Predictions  --------------------------------------------------------
+#Model 4 - Fixed Effect + Urban_Rural_Random_Effect + Dist_Random_Effect + 
+# EA Random_Effect + Spatial Effect
+
+#Use the generate function to make predictions
+mu <- generate(mod4_count, newdata = pred_covs, formula = ~ Intercept +
+                 x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61+
+                 Random_rural_urban_eval(rural_urban_id)+
+                 Random_dist_eval(dist_id)+
+                 Random_Spat_eval(cbind(long, lat)), 
+               n.samples = 100, 
+               seed = 2,
+               num.threads = "1" )
+
+#Get iid random effect for EA id
+n.samples = 100
+
+iid.sd <- sqrt(1 / mod4_count$summary.hyperpar["Precision for Random_EA",1])
+Random_EA_eval <- matrix(rnorm(nrow(pred_covs)*n.samples, 0, iid.sd),
+                         nrow = nrow(pred_covs),
+                         ncol = n.samples)
+
+#Add random effect to data
+mu <- mu + Random_EA_eval
+
+
+#Back transform mu
+predicted_density <- exp(mu) %>%
+  as_tibble()
+
+#Add building count for each grid
+predicted_density <- predicted_density %>%
+  mutate(bcount = pred_covs$bcount)
+
+#Estimate HH Count
+predicted_hh_count4 <- predicted_density %>%
+  mutate_at(vars(starts_with("v")), ~ . * bcount) %>%
+  select(-bcount)
+
+#Total Predicted hh count and Uncertainty
+
+hh_model4 <- predicted_hh_count4 %>%
+  apply(2, sum, na.rm = T) %>%
+  as_tibble()%>%
+  summarise(mean_hh_count = round(mean(value)),
+            upper_quantile = round(quantile(value, probs=0.975)),
+            lower_quantile = round(quantile(value, probs =0.025)))
+
+hh_model4 %>% kable()
+
+# District HH Estimates ---------------------------------------------
+
+district_names <- pred_covs %>%
+  select(DIST_NAME)
+
+#cbind district to data
+district_estimates <- cbind(predicted_hh_count4, district_names) %>%
+  as_tibble()
+
+#Group by district and split data according to district
+district_estimates <- district_estimates %>%
+  group_by(DIST_NAME) %>%
+  group_split()
+
+
+#for loop to get CI for each admin
+OUT <- list()
+for(dd in 1:length(district_estimates)){
+  
+  df <- district_estimates[[dd]]
+  
+  # get the ID of the current area being processed
+  typro <- unique(df$DIST_NAME)
+  print(typro)
+  
+  
+  df <- df %>%
+    select(starts_with("v")) %>%
+    apply(2, sum, na.rm = T)  
+  
+  OUT[[dd]] <- c(district_names = typro, mean = mean(df),
+                 lower_quantile = quantile(df, 0.025),
+                 upper_quantile = quantile(df, 0.975),
+                 median = quantile(df, 0.500))
+  
+  #print(OUT)
+}
+
+AA <- do.call(rbind, OUT)
+AA
+
+#Convert to tibble and export as a csv
+district_hh_count <- AA %>%
+  as_tibble() %>%
+  rename(DIST_NAME = district_names, Estimated_Count = mean, 
+         Lower_Count = "lower_quantile.2.5%" ,
+         Median_Count = "median.50%", 
+         Upper_Count = "upper_quantile.97.5%")
+
+#Write to file
+
+# Summarize pixel level predictions ---------------------------------------
+
+#Summarize predictions
+tic() 
+
+mean_count <- rowMeans(predicted_hh_count4, na.rm = T)
+median_count <- apply(predicted_hh_count4, 1, FUN = function(x) quantile(x, probs = 0.5, na.rm = T))
+std_count <- apply(predicted_hh_count4, 1, sd)
+lower_quantile <- apply(predicted_hh_count4, 1, FUN = function(x) quantile(x, probs = 0.025, na.rm=T))
+upper_quantile <- apply(predicted_hh_count4, 1, FUN = function(x) quantile(x, probs = 0.975, na.rm = T))
+uncertainty = (upper_quantile - lower_quantile)/mean_count
+coe_var = std_count/mean_count
+
+toc()
+
+#sum predictions
+sum(median_count, na.rm = T)
+sum(mean_count, na.rm = T)
+
+#Cbind predictions to xy coord
+
+pixel_predictions4 <- cbind(mean_count, median_count, std_count,
+                            lower_quantile, upper_quantile, uncertainty, coe_var) %>%
+  as_tibble() %>%
+  mutate(long = pred_covs$long, lat = pred_covs$lat,
+         bcount = pred_covs$bcount,
+         hh_density = mean_count/bcount)
+
+summary(pixel_predictions4$mean_count)
+summary(pixel_predictions4$hh_density)
+
+
+
+####################################################################
+# Compare predictions
+
+pred<- rbind(hh_model1, hh_model2, hh_model3, hh_model4) 
+pred %>%  kable()
+
+hh <- rbind(hh_metrics1, hh_metrics2, hh_metrics3, hh_metrics4)
+hh%>%  kable()
+
+dens <- rbind(density_metrics1, density_metrics2, density_metrics3, density_metrics4)
+dens %>%  kable()
+
+##################################################################################
+############### EXPORT BEST MODEL RASTER TO FILE ##################################
+###################################################################################
+
+# Rasterize Predictions ---------------------------------------------------
+# Base on the model we will rasterize model 3 as best model
+
+# #Convert to sf object
+pixel_predictions4  <- st_as_sf(pixel_predictions4 , coords = c("long", "lat"))
+st_crs(pixel_predictions4) <- 4326
+
+#write to file
+st_write(pixel_predictions4, paste0(output_path1, "HH_Count_predicted.gpkg"), append = T)
+
+#Rasterize mean and export to file
+mean_raster  <- rasterize(pixel_predictions4, r1, field = "mean_count")
+plot(mean_raster)
+
+#export
+writeRaster(mean_raster,  
+            paste0(output_path1, "HH_count_prediction_mean.tif"), 
+            overwrite=TRUE, names="mean")
+
+#Rasterize sd
+std_raster   <- rasterize(pixel_predictions4, r1, field = "std_count") 
+
+writeRaster(std_raster,   
+            paste0(output_path1, "HH_count_prediction_std.tif"), 
+            overwrite=TRUE, names="std")
+
+#Lower
+lower_raster <- rasterize(pixel_predictions4, r1, field = "lower_quantile") 
+
+writeRaster(lower_raster, 
+            paste0(output_path1, "HH_count_prediction_lower.tif"), 
+            overwrite=TRUE, names="lower")
+
+#upper
+upper_raster <- rasterize(pixel_predictions4, r1, field = "upper_quantile")
+
+#Write to file
+writeRaster(upper_raster, 
+            paste0(output_path1, "HH_count_prediction_upper.tif"), 
+            overwrite=TRUE, names="upper")
+
+
+#############################################################################
+############################ END OF SCRIPT ##################################
+############################################################################
