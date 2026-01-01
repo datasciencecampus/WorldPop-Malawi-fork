@@ -9,8 +9,8 @@ library(tidyverse)
 options(scipen = 999) # turn off scientific notation for all variables
 
 #Specify Drive Path
-drive_path <- "//Internal/MALAWI/Ortis/"
-input_path <- paste0(drive_path, "Input_Data/Surveys/")
+drive_path <- "./data/"
+input_path <- paste0(drive_path, "mnso_ons_data.20251216.dat/")
 output_path <- paste0(drive_path, "/Output_Data/")
 shapefile_path <- paste0(drive_path, "Input_Data/Shapefiles/")
 
