@@ -1,26 +1,26 @@
-#Script to mosaic rasters using neighboring countries
+# Script to mosaic rasters using neighboring countries
 
 library(terra)
 library(sf)
 library(tictoc)
 
 # Specify data path
-drive_path <- "//Working/MALAWI/Ortis/"
-base_path <- paste0(drive_path, "Input_Data/") ## Base path where the folders are located
-shp_path <- paste0(drive_path, "Input_Data/Shapefiles/") ## Shapefile path
-result_path <- paste0(drive_path, "Input_Data/Mosaic_Buildings_2018/") # Result path
-building_path <- paste0(drive_path, "Input_Data/Malawi_Covs/2018_Buildings/")
+drive_path <- "./data"
+base_path <- paste0(drive_path) ## Base path where the folders are located
+shp_path <- paste0(drive_path, "/Shapefiles/") ## Shapefile path
+result_path <- paste0(drive_path, "/Mosaic_Buildings/") # Result path
+building_path <- paste0(drive_path, "/covariate_data/")
 
 #Load data
-boundary <- st_read(paste0(shp_path, "Country_Shapefile_Buffer_10km.shp"))
-r1 <- rast(paste0(building_path, "mwi_buildings_count_2018_glv2_5_t0_5_C_100m_v1.tif"))
+boundary <- st_read(paste0(shp_path, "LU.shp")) # replacing: "Country_Shapefile_Buffer_10km.shp"
+r1 <- rast(paste0(building_path, "mwi_buildings_count_BCB_ms_100m_v1_1.tif")) # replacing: "mwi_buildings_count_2018_glv2_5_t0_5_C_100m_v1.tif"
 
 #Reproject boundary to r1
 boundary <- st_transform(boundary, crs = st_crs(r1))
 
 # Define folder names
-folders <- c("Malawi_Covs/2018_Buildings","Mozambique_Covs/2018_Buildings", 
-             "Tanzania_Covs/2018_Buildings", "Zambia_Covs/2018_Buildings")
+folders <- c("Malawi_Covs/Buildings", "Tanzania_Covs/Buildings",
+             "Mozambique_Covs/Buildings", "Zambia_Covs/Buildings")
 
 
 # Initialize a list to store raster file names
