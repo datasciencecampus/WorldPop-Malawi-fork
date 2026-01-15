@@ -3,7 +3,7 @@ library(sf)
 library(tictoc)
 
 # Specify data path
-drive_path <- "//Working/MALAWI/Ortis/"
+drive_path <- "./data/"
 base_path <- paste0(drive_path, "Input_Data/") ## Base path where the folders are located
 shp_path <- paste0(drive_path, "Input_Data/Shapefiles/") ## Shapefile path
 result_path <- paste0(drive_path, "Input_Data/Mosaic_Covariates_2024/") # Result path
