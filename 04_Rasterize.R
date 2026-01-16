@@ -8,13 +8,13 @@ library(raster)
 
 
 #Specify Drive Path
-drive_path <- "//Working/MALAWI/Ortis/"
+drive_path <- "./data/"
 output_path <- paste0(drive_path, "Output_Data/")
-shapefile_path <- paste0(drive_path, "Input_Data/Shapefiles/")
+shapefile_path <- paste0(drive_path, "Shapefiles/")
 bcount_path_2024 <- paste0(drive_path, "Input_Data/Mosaic_Buildings_2024/")
 
 #Load datasets
-ea <- st_read(file.path(shapefile_path, "EA_Shapefile.shp"))
+ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use.shp")) # replaces "EA_Shapefile.shp"
 bcount <- rast(file.path(bcount_path_2024, "MOS_MLW_buildings_count_2023_glv2_5_t0_5_C_100m_v1.tif"))
 country <- st_read(file.path(shapefile_path, "Country_Shapefile.shp"))
 hh_size <- read.csv(paste0(output_path, "summarized_survey_data.csv"))
