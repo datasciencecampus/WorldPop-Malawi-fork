@@ -10,10 +10,10 @@ library(tidyverse)
 options(scipen = 999) # turn off scientific notation for all variables
 
 #Specify Drive Path
-drive_path <- "//Internal_Path/"
-input_path <- paste0(drive_path, "Input_Data/Surveys/")
+drive_path <- "./data/"
+input_path <- paste0(drive_path, "MNSO-Data/")
 output_path <- paste0(drive_path, "/Output_Data/")
-shapefile_path <- paste0(drive_path, "Input_Data/Shapefiles/")
+shapefile_path <- paste0(drive_path, "Shapefiles/")
 
 #Load datasets
 mphc_2018 <- read_dta(paste0(input_path, "mphc2018Data_AllRegions.dta"))
@@ -21,7 +21,7 @@ mphc_2018 <- read_dta(paste0(input_path, "mphc2018Data_AllRegions.dta"))
 ICT_data <- read_dta(paste0(input_path, "ICT Listing WorldPop.dta"))
 IHS6_data <- read_dta(paste0(input_path, "IHS6 Listing WorldPop.dta"))
 Naca_data <- read_dta(paste0(input_path, "Naca Listing WorldPop.dta"))
-ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use_Corrected.shp"))
+ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use.shp")) # replaces "2018_MPHC_EAs_Final_for_Use_Corrected.shp"
 #mphc_structures_2018 <- st_read(paste0(output_path, "mphc_structures_points.gpkg"))
 dhs_data <- read_dta(paste0(input_path, "MDHS_2024_NoDZLK_anonymized.dta"))
 dhs_listing <- read_dta(paste0(input_path, "FINAL MDHS LISTING DATA_Annon.dta"))
@@ -41,7 +41,7 @@ mphc_2018 <- mphc_2018 %>%
 mphc_2018_no_gps <- mphc_2018 %>% 
   filter(is.na(hh_longitude) | is.na(hh_latitude))
 
-#Add additonal digits to EA and TA code
+#Add additional digits to EA and TA code
 
 mphc_2018_no_gps <- mphc_2018_no_gps %>%  
   mutate(new_ta = str_pad(ta, width = 2, pad = 0),
@@ -67,7 +67,7 @@ mphc_pop_no_gps <- mphc_2018_no_gps %>%
             female_count = sum(p03 == 2, na.rm = TRUE))
 
 
-#Create a bin for each age catgeory
+#Create a bin for each age category
 age_summary_no_gps <- mphc_2018_no_gps %>%  
   mutate(age_group = case_when(
     p05 < 1  ~ "age_group_01_less",      #less than 1
@@ -159,6 +159,52 @@ mphc_2018_df <- mphc_2018_df %>%
 #check the summary of gps accuracy
 summary(mphc_2018_df$hh_gps_accuracy)
 
+
+#  #Fix corrupt geometries
+#  st_make_valid(ea)
+ 
+#  #Turn off invalid geometries
+#  sf::sf_use_s2(FALSE)
+ 
+#  #transform
+#  mphc_2018_sf <- st_transform(mphc_2018_sf, crs = st_crs(ea))
+ 
+#  # EA Nearest Neighbor Assignment 
+#  nearest_indices <- st_nearest_feature(mphc_2018_sf, ea)
+ 
+#  # Extract the EA_CODE  of the nearest polygons
+#  nearest_ids <- ea$EA_CODE[nearest_indices]
+ 
+#  # Add the EA_CODE to data
+#  mphc_2018_sf$EA_CODE <- nearest_ids
+ 
+#  #Write to file
+#  st_write(mphc_2018_sf , 
+#   dsn = file.path(output_path, "mphc_2018_sf_ea.gpkg"), 
+#   driver = "GPKG", 
+#   delete_layer = TRUE
+#   )
+ 
+#  #load dataset
+#  #mphc_2018_sf <- st_read(paste0(output_path, "mphc_2018_sf_ea.gpkg"))
+ 
+#  #convert to dataframe
+#  mphc_2018_df <- mphc_2018_sf %>%  
+#    as_tibble() 
+ 
+#  #check the summary of gps accuracy
+#  summary(mphc_2018_df$hh_gps_accuracy)
+ 
+# # NOTE: ONS CHANGE: Adding a 'hh_count' column of 1 per row. This is a required 
+# # column below but is not in the source data. 
+# # This change assumes that each row corresponds to a single resident of Malawi in
+# # the census records.
+# # Justification: total rows in source data is 17,563,749, matching the published
+# # population count for the census. Also this replicates the logic of the no_gps 
+# # processing above. 
+# mphc_2018_df <- mphc_2018_df %>% 
+#    mutate(hh_count = 1)  # Individual observation
+ 
 # Summarize data base on their spatial location
 
 mphc_2018_pop_spatial <- mphc_2018_df %>%  
