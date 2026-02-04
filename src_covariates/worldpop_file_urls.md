@@ -298,6 +298,8 @@ https://data.worldpop.org/GIS/Covariates/Global_2015_2030/MOZ/OSM/v1/moz_highway
 https://data.worldpop.org/GIS/Covariates/Global_2015_2030/ZMB/OSM/v1/zmb_highway_dist_osm_2023_100m_v1.tif
 
 49. inland_water_pct_100m_v1.tif
+https://data.worldpop.org/GIS/Covariates/Global_2015_2030/MWI/Inland_water/esa_worldcover/v1/Dist/mwi_dist_inland_water_100m_esa_2021_v1.tif
+https://data.worldpop.org/GIS/Covariates/Global_2015_2030/MWI/OSM/v1/mwi_waterbodies_dist_osm_2023_100m_v1.tif
 
 50. ms_roads_count_100m_v1.tif
 
