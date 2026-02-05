@@ -2,6 +2,8 @@ library(terra)
 library(sf)
 library(tictoc)
 
+source("utils.R")
+
 # Specify data path
 drive_path <- "./data/"
 base_path <- paste0(drive_path, "Input_Data/") ## Base path where the folders are located
@@ -10,7 +12,13 @@ result_path <- paste0(drive_path, "Input_Data/Mosaic_Covariates_2018/") # Result
 building_path <- paste0(drive_path, "Input_Data/Malawi_Covs/2024_Buildings/")
 
 #Load data
-boundary <- st_read(paste0(shp_path, "Country_Shapefile_Buffer_10km.shp"))
+boundary_data_filename <- "Country_Shapefile_Buffer_10km.shp"
+if(file.exists(paste0(shp_path, boundary_data_filename))) {
+  boundary <- st_read(paste0(shp_path, boundary_data_filename))
+} else {
+  boundary <- generate_buffered_country_boundary(shp_path, boundary_data_filename)
+}
+
 r1 <- rast(paste0(building_path, "mwi_buildings_count_2023_glv2_5_t0_5_C_100m_v1.tif"))
 
 #Reproject boundary to r1
