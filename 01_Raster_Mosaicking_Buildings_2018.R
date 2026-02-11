@@ -1,26 +1,34 @@
-#Script to mosaic rasters using neighboring countries
+# Script to mosaic rasters using neighboring countries
 
 library(terra)
 library(sf)
 library(tictoc)
 
+source("utils.R")
+
 # Specify data path
-drive_path <- "//Working/MALAWI/Ortis/"
-base_path <- paste0(drive_path, "Input_Data/") ## Base path where the folders are located
-shp_path <- paste0(drive_path, "Input_Data/Shapefiles/") ## Shapefile path
-result_path <- paste0(drive_path, "Input_Data/Mosaic_Buildings_2018/") # Result path
-building_path <- paste0(drive_path, "Input_Data/Malawi_Covs/2018_Buildings/")
+drive_path <- "./data"
+base_path <- paste0(drive_path) ## Base path where the folders are located
+shp_path <- file.path(drive_path, "Shapefiles") ## Shapefile path
+result_path <- file.path(drive_path, "Mosaic_Buildings_2018") # Result path
+building_path <- file.path(drive_path, "Malawi_Covs", "2018_Buildings")
 
 #Load data
-boundary <- st_read(paste0(shp_path, "Country_Shapefile_Buffer_10km.shp"))
-r1 <- rast(paste0(building_path, "mwi_buildings_count_2018_glv2_5_t0_5_C_100m_v1.tif"))
+boundary_data_filename <- "Country_Shapefile_Buffer_10km.shp"
+if(file.exists(file.path(shp_path, boundary_data_filename))) {
+  boundary <- st_read(file.path(shp_path, boundary_data_filename))
+} else {
+  boundary <- generate_buffered_country_boundary(shp_path, boundary_data_filename)
+}
+
+r1 <- rast(file.path(building_path, "mwi_buildings_count_2018_glv2_5_t0_5_C_100m_v1.tif")) 
 
 #Reproject boundary to r1
 boundary <- st_transform(boundary, crs = st_crs(r1))
 
 # Define folder names
-folders <- c("Malawi_Covs/2018_Buildings","Mozambique_Covs/2018_Buildings", 
-             "Tanzania_Covs/2018_Buildings", "Zambia_Covs/2018_Buildings")
+folders <- c("Malawi_Covs/2018_Buildings", "Tanzania_Covs/2018_Buildings",
+             "Mozambique_Covs/2018_Buildings", "Zambia_Covs/2018_Buildings")
 
 
 # Initialize a list to store raster file names
@@ -65,6 +73,11 @@ process_raster <- function(raster_name) {
   
   # Save the masked raster to a file with a name based on the original raster file name
   output_name <- paste0("MOS_MLW", raster_name)
+  
+  if (!file.exists(result_path)){
+    dir.create(file.path(result_path))
+  }
+  
   writeRaster(masked_raster, file.path(result_path, output_name), overwrite = TRUE)
   
   # Display a message after saving the raster

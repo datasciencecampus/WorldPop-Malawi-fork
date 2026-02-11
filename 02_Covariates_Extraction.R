@@ -9,9 +9,9 @@ library(terra)
 library(exactextractr)
 
 #Specify Drive Path
-drive_path <- "//Working/MALAWI/Ortis/"
+drive_path <- "./data/"
 input_path <- paste0(drive_path, "Output_Data/")
-shapefile_path <- paste0(drive_path, "Input_Data/Shapefiles/")
+shapefile_path <- paste0(drive_path, "Shapefiles/")
 covs_path_2018 <- paste0(drive_path, "Input_Data/Mosaic_Covariates_2018/")
 covs_path_2024 <- paste0(drive_path, "Input_Data/Mosaic_Covariates_2024/")
 bcount_path_2018 <- paste0(drive_path, "Input_Data/Mosaic_Buildings_2018/")
@@ -20,7 +20,7 @@ output_path <- paste0(drive_path, "Output_Data/")
 
 
 # Load dataset ------------------------------------------------------------
-ea <- st_read(file.path(shapefile_path, "EA_Shapefile.shp"))
+ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use.shp")) # replaces "EA_Shapefile.shp"
 pop_data <- read.csv(file.path (input_path, "summarized_survey_data.csv"))
 r1 <- rast(file.path(bcount_path_2024, "MOS_MLW_buildings_count_2023_glv2_5_t0_5_C_100m_v1.tif"))
 
