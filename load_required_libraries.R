@@ -34,7 +34,8 @@ required_libraries <- c(
   "caret", # Classification And REgression Training
   "kableExtra", # for html tables
   "inlabru", # package for Bayesian spatial modelling 
-  "feather" # reading and writing feather files
+  "feather", # reading and writing feather files
+  "nngeo" # nearest neighbour in geospatial
 )
 
 # Execute code to load (and install) libraries

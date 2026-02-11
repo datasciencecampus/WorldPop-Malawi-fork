@@ -1,4 +1,4 @@
-# Data exploration workflow for dataset recived
+# Data exploration workflow for dataset received
 
 #load packages
 library(sf)
@@ -9,21 +9,41 @@ library(tidyverse)
 options(scipen = 999) # turn off scientific notation for all variables
 
 #Specify Drive Path
-drive_path <- "//Internal_Path/"
-input_path <- paste0(drive_path, "Input_Data/Surveys/")
-output_path <- paste0(drive_path, "/Output_Data/")
-shapefile_path <- paste0(drive_path, "Input_Data/Shapefiles/")
+drive_path <- "./data"
+input_path <- file.path(drive_path, "MNSO-Data")
+output_path <- file.path(drive_path, "Output_Data")
+shapefile_path <- file.path(drive_path, "Shapefiles")
 
 #Load datasets
-mphc_2018 <- read_dta(paste0(input_path, "mphc2018Data_AllRegions.dta"))
-mphc_structures_2018 <- read_dta(paste0(input_path, "mphc2018Data_structures.dta"))
-ICT_data <- read_dta(paste0(input_path, "ICT Listing WorldPop.dta"))
-IHS6_data <- read_dta(paste0(input_path, "IHS6 Listing WorldPop.dta"))
-Naca_data <- read_dta(paste0(input_path, "Naca Listing WorldPop.dta"))
-ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use_Corrected.shp"))
-mphc_structures_2018 <- st_read(paste0(output_path, "mphc_structures_points.gpkg"))
-dhs_data <- read_dta(paste0(input_path, "MDHS_2024_NoDZLK_anonymized.dta"))
-dhs_listing <- read_dta(paste0(input_path, "FINAL MDHS LISTING DATA_Annon.dta"))
+mphc_2018 <- read_dta(file.path(input_path, "mphc2018Data_AllRegions.dta"))
+mphc_structures_2018 <- read_dta(file.path(input_path, "mphc2018Data_structures.dta"))
+ICT_data <- read_dta(file.path(input_path, "ICT Listing WorldPop.dta"))
+IHS6_data <- read_dta(file.path(input_path, "IHS6 Listing WorldPop.dta"))
+Naca_data <- read_dta(file.path(input_path, "Naca Listing WorldPop.dta"))
+ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use.shp")) # replaces "2018_MPHC_EAs_Final_for_Use_Corrected.shp"
+dhs_data <- read_dta(file.path(input_path, "MDHS_2024_NoDZLK_anonymized.dta"))
+dhs_listing <- read_dta(file.path(input_path, "FINAL MDHS LISTING DATA_Annon.dta"))
+
+mphc_structures_2018_filepath <- file.path(
+  output_path, "mphc_structures_points.gpkg")
+
+if (!file.exists(mphc_structures_2018_filepath)) {
+  #Structures
+  #Convert to sf object
+  mphc_structures_sf <- mphc_structures_2018 |>
+    drop_na(st_longitude, st_latitude) |>
+    st_as_sf(coords = c("st_longitude", "st_latitude"))
+
+  #set the spatial reference
+  st_crs(mphc_structures_sf ) <- 4326
+
+  # Write to GPKG file
+  st_write(mphc_structures_sf ,
+           dsn = file.path(output_path, "mphc_structures_points.gpkg"),
+           driver = "GPKG",
+           delete_layer = TRUE)
+}
+mphc_structures_2018 <- st_read(file.path(output_path, "mphc_structures_points.gpkg"))
 
 # Write each data as a shapefile  -----------------------------------------
 
@@ -41,20 +61,7 @@ dhs_listing <- read_dta(paste0(input_path, "FINAL MDHS LISTING DATA_Annon.dta"))
 #          driver = "GPKG", 
 #          delete_layer = TRUE)  # overwrite if layer already exists
 # 
-# #Structures
-# #Convert to sf object
-# mphc_structures_sf <- mphc_structures_2018 |> 
-#   drop_na(st_longitude, st_latitude) |> 
-#   st_as_sf(coords = c("st_longitude", "st_latitude"))
-# 
-# #set the spatial reference
-# st_crs(mphc_structures_sf ) <- 4326
-# 
-# # Write to GPKG file
-# st_write(mphc_structures_sf , 
-#          dsn = file.path(output_path, "mphc_structures_points.gpkg"), 
-#          driver = "GPKG", 
-#          delete_layer = TRUE)  
+
 # 
 # #ICT
 # ICT_sf <- ICT_data |> 
@@ -179,7 +186,7 @@ mphc_pop_per_ea <- mphc_2018 |>
             female_count = sum(p03 == 2, na.rm = TRUE))
   
 
-#Create a bin for each age catgeory
+#Create a bin for each age category
 age_summary <- mphc_2018 |> 
   mutate(age_group = case_when(
     p05 < 1  ~ "age_group_01_less",      #less than 1
@@ -333,13 +340,13 @@ combined_data <- combined_data |>
   
 #Write to file
 
-write.csv(combined_data, paste0(output_path, "summarized_survey_data.csv"), row.names = F)
+write.csv(combined_data, file.path(output_path, "summarized_survey_data.csv"), row.names = F)
 
 
 #join combined data to EA shapefile and export
 #Join to ea data
 combined_data <- combined_data |> 
-  mutate(EA_CODE = as.character(EA_CODE))  #convert EA code to interger
+  mutate(EA_CODE = as.character(EA_CODE))  #convert EA code to integer
 
 #select hh size
 hh_size <- combined_data |> 
@@ -352,7 +359,7 @@ hh_ea <- hh_ea |>
   select(EA_CODE, mphc_total_pop, hh_size)
 
 #write to file
-st_write(hh_ea, paste(output_path, "hh_size_data.shp"))
+st_write(hh_ea, file.path(output_path, "hh_size_data.shp"))
 
 
 

@@ -1,4 +1,6 @@
 # Summarizing data at the EA level using EA-CODE and Spatial location of the points
+# Should be run after 00_Data_Processing.R
+# NOTE: This is currently omitting the Zomba, Malemia and DHS Segmented data due to availability.
 
 #load packages
 library(sf)
@@ -10,24 +12,20 @@ library(tidyverse)
 options(scipen = 999) # turn off scientific notation for all variables
 
 #Specify Drive Path
-drive_path <- "./data/"
-input_path <- paste0(drive_path, "MNSO-Data/")
-output_path <- paste0(drive_path, "/Output_Data/")
-shapefile_path <- paste0(drive_path, "Shapefiles/")
+drive_path <- "./data"
+input_path <- file.path(drive_path, "MNSO-Data")
+output_path <- file.path(drive_path, "Output_Data")
+shapefile_path <- file.path(drive_path, "Shapefiles")
 
 #Load datasets
-mphc_2018 <- read_dta(paste0(input_path, "mphc2018Data_AllRegions.dta"))
-#mphc_structures_2018 <- read_dta(paste0(input_path, "mphc2018Data_structures.dta"))
-ICT_data <- read_dta(paste0(input_path, "ICT Listing WorldPop.dta"))
-IHS6_data <- read_dta(paste0(input_path, "IHS6 Listing WorldPop.dta"))
-Naca_data <- read_dta(paste0(input_path, "Naca Listing WorldPop.dta"))
+mphc_2018 <- read_dta(file.path(input_path, "mphc2018Data_AllRegions.dta"))
+ICT_data <- read_dta(file.path(input_path, "ICT Listing WorldPop.dta"))
+IHS6_data <- read_dta(file.path(input_path, "IHS6 Listing WorldPop.dta"))
+Naca_data <- read_dta(file.path(input_path, "Naca Listing WorldPop.dta"))
 ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use.shp")) # replaces "2018_MPHC_EAs_Final_for_Use_Corrected.shp"
-#mphc_structures_2018 <- st_read(paste0(output_path, "mphc_structures_points.gpkg"))
-dhs_data <- read_dta(paste0(input_path, "MDHS_2024_NoDZLK_anonymized.dta"))
-dhs_listing <- read_dta(paste0(input_path, "FINAL MDHS LISTING DATA_Annon.dta"))
-dhs_file <- read.csv(paste0(input_path, "DHS_Segmented_File.csv"))
-zomba_data <- read.csv(paste0(output_path, "zomba_rbind_data.csv"))
-malemia_data <- read.csv(paste0(input_path, "malemia_hh_without_IDs.csv"))
+dhs_data <- read_dta(file.path(input_path, "MDHS_2024_NoDZLK_anonymized.dta"))
+dhs_listing <- read_dta(file.path(input_path, "FINAL MDHS LISTING DATA_Annon.dta"))
+
 
 #####################################################################################
 ####################################################################################
@@ -110,42 +108,47 @@ mphc_pop_no_gps <- mphc_pop_no_gps %>%
 
 # ============================================================== ----------
 
-# Convert remaining mphc_2018 data to shapefiles
-
-# #Convert to sf object
-# mphc_2018_sf <- mphc_2018 %>%  
-#  drop_na(hh_longitude, hh_latitude) %>%  
-#  st_as_sf(coords = c("hh_longitude", "hh_latitude"))
-# 
-# #set the spatial reference
-# st_crs(mphc_2018_sf) <- 4326
-
-#Fix corrupt geometries
-#st_make_valid(ea)
-
-#Turn off invalid geometries
-# sf::sf_use_s2(FALSE)
-
-#transform
-# mphc_2018_sf <- st_transform(mphc_2018_sf, crs = st_crs(ea))
-
-# EA Nearest Neighbor Assignment 
-# nearest_indices <- st_nearest_feature(mphc_2018_sf, ea)
-
-# Extract the EA_CODE  of the nearest polygons
-# nearest_ids <- ea$EA_CODE[nearest_indices]
-
-# Add the EA_CODE to data
-# mphc_2018_sf$EA_CODE <- nearest_ids
-
-#Write to file
-#st_write(mphc_2018_sf , 
-# dsn = file.path(output_path, "mphc_2018_sf_ea.gpkg"), 
-# driver = "GPKG", 
-# delete_layer = TRUE)
-
 #load dataset
-mphc_2018_sf <- st_read(paste0(output_path, "mphc_2018_sf_ea.gpkg"))
+mphc_2018_sf_filepath <- file.path(output_path, "mphc_2018_sf_ea.gpkg")
+if (!file.exists(mphc_2018_sf_filepath)) {
+  print("The geopackage version of mphc_2018 is not available, creating dataframe and saving to disk.")
+  
+  # Convert remaining mphc_2018 data to shapefiles
+  
+  #Convert to sf object
+  mphc_2018_sf <- mphc_2018 %>%
+  drop_na(hh_longitude, hh_latitude) %>%
+  st_as_sf(coords = c("hh_longitude", "hh_latitude"))
+  
+  #set the spatial reference
+  st_crs(mphc_2018_sf) <- 4326
+
+  #Fix corrupt geometries
+  st_make_valid(ea)
+
+  #Turn off invalid geometries
+  sf::sf_use_s2(FALSE)
+
+  #transform
+  mphc_2018_sf <- st_transform(mphc_2018_sf, crs = st_crs(ea))
+
+  # EA Nearest Neighbor Assignment
+  nearest_indices <- st_nearest_feature(mphc_2018_sf, ea)
+
+  # Extract the EA_CODE  of the nearest polygons
+  nearest_ids <- ea$EA_CODE[nearest_indices]
+
+  # Add the EA_CODE to data
+  mphc_2018_sf$EA_CODE <- nearest_ids
+
+  #Write to file
+  st_write(mphc_2018_sf ,
+   dsn = file.path(output_path, "mphc_2018_sf_ea.gpkg"),
+   driver = "GPKG",
+   delete_layer = TRUE
+   )
+}
+mphc_2018_sf <- st_read(mphc_2018_sf_filepath)
 
 #convert to dataframe
 mphc_2018_df <- mphc_2018_sf %>%  
@@ -186,7 +189,7 @@ summary(mphc_2018_df$hh_gps_accuracy)
 #   )
  
 #  #load dataset
-#  #mphc_2018_sf <- st_read(paste0(output_path, "mphc_2018_sf_ea.gpkg"))
+#  #mphc_2018_sf <- st_read(file.path(output_path, "mphc_2018_sf_ea.gpkg"))
  
 #  #convert to dataframe
 #  mphc_2018_df <- mphc_2018_sf %>%  
@@ -589,27 +592,42 @@ sum(Naca_data$hh_count)
 #####################################################################################
 ####################################################################################
 ######### PROCESS DHS Listing DATA ################################################ 
-#Not segmented clusters
-unique(dhs_file$Cluster.Segmented)
 
-#Get non-segmented cluster
-non_seg_cluster <- dhs_file %>% 
-  filter(grepl("^no\\b", Cluster.Segmented, ignore.case = TRUE))
 
-#Unique cluster id
-unique(non_seg_cluster$DHScluster)
+dhs_file_path <- file.path(input_path, "DHS_Segmented_File.csv")
+if (!file.exists(dhs_file_path)) {
+  print("'DHS_Segmented_File.csv' cannot be found. Skipping processing of this data.")
+  
+  #Add a new column to data called hh_count
+  dhs_listing <- dhs_listing %>%  
+    mutate(hh_count = 1)
+  
+} else {
+  dhs_file <- read.csv(dhs_file_path)  ## FILE MISSING!
+  
+  #Not segmented clusters
+  unique(dhs_file$Cluster.Segmented)
+  
+  #Get non-segmented cluster
+  non_seg_cluster <- dhs_file %>% 
+    filter(grepl("^no\\b", Cluster.Segmented, ignore.case = TRUE))
+  
+  #Unique cluster id
+  unique(non_seg_cluster$DHScluster)
+  
+  # Clusters in non_seg_cluster and not present in dhs listing
+  missing_clusters <- setdiff(unique(non_seg_cluster$DHScluster), unique(dhs_listing$QHCLUST))
+  missing_clusters
+  
+  #Add a new column to data called hh_count
+  dhs_listing <- dhs_listing %>%  
+    mutate(hh_count = 1)
+  
+  # Subset dhs_listing using the DHScluster IDs in non_seg_cluster
+  dhs_listing <- dhs_listing %>%
+    filter(QHCLUST %in% unique(non_seg_cluster$DHScluster)) 
 
-# Clusters in non_seg_cluster and not present in dhs listing
-missing_clusters <- setdiff(unique(non_seg_cluster$DHScluster), unique(dhs_listing$QHCLUST))
-missing_clusters
-
-#Add a new column to data called hh_count
-dhs_listing <- dhs_listing %>%  
-  mutate(hh_count = 1)
-
-# Subset dhs_listing using the DHScluster IDs in non_seg_cluster
-dhs_listing <- dhs_listing %>%
-  filter(QHCLUST %in% unique(non_seg_cluster$DHScluster)) 
+}
 
 #Summarize total number of hhold per dhs cluster
 dhs_hh_summary <- dhs_listing %>% 
@@ -681,7 +699,7 @@ dhs_hh_count<-  dhs_centroids_sf %>%
 #####################################################################################
 ####################################################################################
 ######### PROCESS DHS SUrvey DATA ################################################ 
-dhs_data <- read_dta(paste0(input_path, "MDHS_2024_NoDZLK_anonymized.dta"))
+dhs_data <- read_dta(file.path(input_path, "MDHS_2024_NoDZLK_anonymized.dta"))
 
 #Calculate hh size per hh
 dhs_size <- dhs_data %>%
@@ -766,94 +784,106 @@ dhs_hh_size<-  dhs_centroids_sf %>%
 ####################################################################################
 ######### PROCESS ZOMBA DISTRICT DATA ################################################ 
 
-#Add a new column to data called hh_count
-zomba_data <- zomba_data %>%  
-  mutate(hh_count = 1)
-
-#Convert to sf object
-zomba_sf <- zomba_data %>%  
-  drop_na(gps_longitude, gps_latitude) %>%  
-  st_as_sf(coords = c("gps_longitude", "gps_latitude"))
-
-# #set the spatial reference
-st_crs(zomba_sf) <- 4326
-
-#transform
-zomba_sf <- st_transform(zomba_sf, crs = st_crs(ea))
-
-# EA Nearest Neighbor Assignment 
-nearest_indices <- st_nearest_feature(zomba_sf, ea)
-
-# Extract the EA_CODE  of the nearest polygons
-nearest_ids <- ea$EA_CODE[nearest_indices]
-
-# Add the EA_CODE to data
-zomba_sf$EA_CODE <- nearest_ids
-
-#Write to file
-#st_write(zomba_sf , 
-#dsn = file.path(output_path, "zomba_point.gpkg"), 
-#driver = "GPKG", 
-#delete_layer = TRUE)
-
-#convert data to tibble
-zomba_tibble <- zomba_sf %>%  
-  as_tibble()
-
-#Summarize data
-zomba_tibble <- zomba_tibble %>% 
-  group_by(EA_CODE) %>% 
-  summarise(zomba_hh_count = sum(hh_count, na.rm = T),
-            zomba_pop = sum(household_size, na.rm = T)) %>%  
-  ungroup() 
+zomba_data_path <- file.path(output_path, "zomba_rbind_data.csv")
+if (file.exists(zomba_data_path)){
+  zomba_data <- read.csv(zomba_data_path) ## FILE MISSING!
+  
+  #Add a new column to data called hh_count
+  zomba_data <- zomba_data %>%  
+    mutate(hh_count = 1)
+  
+  #Convert to sf object
+  zomba_sf <- zomba_data %>%  
+    drop_na(gps_longitude, gps_latitude) %>%  
+    st_as_sf(coords = c("gps_longitude", "gps_latitude"))
+  
+  # #set the spatial reference
+  st_crs(zomba_sf) <- 4326
+  
+  #transform
+  zomba_sf <- st_transform(zomba_sf, crs = st_crs(ea))
+  
+  # EA Nearest Neighbor Assignment 
+  nearest_indices <- st_nearest_feature(zomba_sf, ea)
+  
+  # Extract the EA_CODE  of the nearest polygons
+  nearest_ids <- ea$EA_CODE[nearest_indices]
+  
+  # Add the EA_CODE to data
+  zomba_sf$EA_CODE <- nearest_ids
+  
+  #Write to file
+  #st_write(zomba_sf , 
+  #dsn = file.path(output_path, "zomba_point.gpkg"), 
+  #driver = "GPKG", 
+  #delete_layer = TRUE)
+  
+  #convert data to tibble
+  zomba_tibble <- zomba_sf %>%  
+    as_tibble()
+  
+  #Summarize data
+  zomba_tibble <- zomba_tibble %>% 
+    group_by(EA_CODE) %>% 
+    summarise(zomba_hh_count = sum(hh_count, na.rm = T),
+              zomba_pop = sum(household_size, na.rm = T)) %>%  
+    ungroup() 
+} else {
+  print("The Zomba data cannot be found. Skipping processing of this data for now.")
+}
 
 #####################################################################################
 ####################################################################################
 ######### PROCESS MALEMA DISTRICT DATA ################################################ 
 
-#Add a new column to data called hh_count
-malemia_data <- malemia_data %>%  
-  mutate(hh_count = 1)
+malemia_data_path <- file.path(input_path, "malemia_hh_without_IDs.csv") ## FILE MISSING!
 
-#Convert to sf object
-malemia_sf <- malemia_data %>%  
-  drop_na(hh_longitude, hh_latitude) %>%  
-  st_as_sf(coords = c("hh_longitude", "hh_latitude"))
-
-# #set the spatial reference
-st_crs(malemia_sf) <- 4326
-
-#transform
-malemia_sf <- st_transform(malemia_sf, crs = st_crs(ea))
-
-# EA Nearest Neighbor Assignment 
-nearest_indices <- st_nearest_feature(malemia_sf, ea)
-
-# Extract the EA_CODE  of the nearest polygons
-nearest_ids <- ea$EA_CODE[nearest_indices]
-
-# Add the EA_CODE to data
-malemia_sf$EA_CODE <- nearest_ids
-
-#Write to file
-#st_write(malemia_sf , 
-#dsn = file.path(output_path, "malemia_point.gpkg"), 
-#driver = "GPKG", 
-#delete_layer = TRUE)
-
-#convert data to tibble
-malemia_tibble <- malemia_sf %>%  
-  as_tibble()
-
-#Summarize data
-malemia_tibble <- malemia_tibble %>% 
-  group_by(EA_CODE) %>% 
-  summarise(malemia_hh_count = sum(hh_count, na.rm = T)) %>% 
-  #zomba_pop = sum(household_size, na.rm = T)) %>%  
-  ungroup() 
-
-
-
+if (file.exists(malemia_data_path)) {
+  malemia_data <- read.csv(malemia_data_path) ## FILE MISSING!
+  
+  #Add a new column to data called hh_count
+  malemia_data <- malemia_data %>%  
+    mutate(hh_count = 1)
+  
+  #Convert to sf object
+  malemia_sf <- malemia_data %>%  
+    drop_na(hh_longitude, hh_latitude) %>%  
+    st_as_sf(coords = c("hh_longitude", "hh_latitude"))
+  
+  # #set the spatial reference
+  st_crs(malemia_sf) <- 4326
+  
+  #transform
+  malemia_sf <- st_transform(malemia_sf, crs = st_crs(ea))
+  
+  # EA Nearest Neighbor Assignment 
+  nearest_indices <- st_nearest_feature(malemia_sf, ea)
+  
+  # Extract the EA_CODE  of the nearest polygons
+  nearest_ids <- ea$EA_CODE[nearest_indices]
+  
+  # Add the EA_CODE to data
+  malemia_sf$EA_CODE <- nearest_ids
+  
+  #Write to file
+  #st_write(malemia_sf , 
+  #dsn = file.path(output_path, "malemia_point.gpkg"), 
+  #driver = "GPKG", 
+  #delete_layer = TRUE)
+  
+  #convert data to tibble
+  malemia_tibble <- malemia_sf %>%  
+    as_tibble()
+  
+  #Summarize data
+  malemia_tibble <- malemia_tibble %>% 
+    group_by(EA_CODE) %>% 
+    summarise(malemia_hh_count = sum(hh_count, na.rm = T)) %>% 
+    #zomba_pop = sum(household_size, na.rm = T)) %>%  
+    ungroup() 
+} else {
+  print("Malemia data cannot be found. Skipping processing of this for now.")
+}
 
 
 ############################################################################
@@ -866,9 +896,25 @@ combined_data <- mphc_rbind %>%
   left_join(IHS_rbind, by = "EA_CODE") %>%  
   left_join(Naca_rbind, by = c("EA_CODE" ="EA_Number")) %>% 
   left_join(dhs_hh_size, by = "EA_CODE") %>% 
-  left_join(dhs_hh_count, by = "EA_CODE") %>% 
-  left_join(zomba_tibble, by = "EA_CODE") %>% 
+  left_join(dhs_hh_count, by = "EA_CODE") 
+
+if (exists("zomba_tibble")) {
+  combined_data <- combined_data %>%
+    left_join(zomba_tibble, by = "EA_CODE")
+} else {
+  # add dummy placeholder column full of NAs
+  combined_data <- combined_data %>%
+    mutate(malemia_hh_count = NA)
+}
+
+if (exists("malemia_tibble")) {
+  combined_data <- combined_data %>%
   left_join(malemia_tibble, by = "EA_CODE")
+} else {
+  # add dummy placeholder column full of NAs
+  combined_data <- combined_data %>%
+    mutate(zomba_hh_count = NA)  
+}
 
 #create observed hh_count based on priority conditions
 combined_data <- combined_data %>%  
@@ -896,17 +942,19 @@ combined_data <- combined_data %>%
   select(EA_CODE, mphc_total_pop, mphc_median_hh_size, mphc_mean_hh_size, 
          dhs_median_hh_size, dhs_mean_hh_size, observed_hh_count,dhs_hh_count,
          mphc_hh_count, ict_hh_count, ihs_hh_count,
-         naca_hh_count, zomba_hh_count, malemia_hh_count, zomba_pop, female_count, male_count, starts_with("age_"))
+         naca_hh_count, zomba_hh_count, malemia_hh_count, 
+         # zomba_pop, ### excluding here as commented out in processed code above so not created by default
+         female_count, male_count, starts_with("age_"))
 
 #Write to file
 
-write.csv(combined_data, paste0(output_path, "summarized_survey_data.csv"), row.names = F)
+write.csv(combined_data, file.path(output_path, "summarized_survey_data.csv"), row.names = F)
 
 
 #join combined data to EA shapefile and export
 #Join to ea data
 combined_data <- combined_data %>%  
-  mutate(EA_CODE = as.character(EA_CODE))  #convert EA code to interger
+  mutate(EA_CODE = as.character(EA_CODE))  #convert EA code to integer
 
 #select hh size
 hh_size <- combined_data %>%  
@@ -919,7 +967,7 @@ hh_ea <- hh_ea %>%
   select(EA_CODE, mphc_total_pop, mphc_median_hh_size, mphc_mean_hh_size)
 
 #write to file
-st_write(hh_ea, paste(output_path, "hh_size_data.gpkg"), append = T)
+st_write(hh_ea, file.path(output_path, "hh_size_data.gpkg"), append = T)
 
 
 #################### END OF SCRIPT #########################################
