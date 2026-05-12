@@ -2,10 +2,13 @@
 library(tidyverse)
 
 #Load data files
+drive_path <- "./data/"
+input_path <- paste0(drive_path, "Input_Data/")
+output_path <- paste0(drive_path, "Output_Data/")
 
-malawi_urban_ea_bldgs <- read.csv("C:/Users/plummm/OneDrive - Office for National Statistics/Geospatial projects/Malawi_EA/ratio_change_method/malawi_urban_ea_bldgs.csv")
 
-malawi_rural_ea_bldgs <- read.csv("C:/Users/plummm/OneDrive - Office for National Statistics/Geospatial projects/Malawi_EA/ratio_change_method/malawi_rural_ea_bldgs.csv")
+malawi_urban_ea_bldgs <- read.csv(paste0(input_path, "malawi_urban_ea_bldgs.csv"))
+malawi_rural_ea_bldgs <- read.csv(paste0(input_path, "malawi_rural_ea_bldgs.csv"))
 
 
 
