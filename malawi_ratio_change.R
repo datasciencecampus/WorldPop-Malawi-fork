@@ -3,7 +3,7 @@ library(tidyverse)
 library(ggplot2)
 
 #Load data files
-drive_path <- "./data/"
+drive_path <- "./data/ratio_change_data/"
 input_path <- paste0(drive_path, "Input_Data/")
 output_path <- paste0(drive_path, "Output_Data/")
 
@@ -56,6 +56,13 @@ summarise_abs_errors <- function(df, area_type = c("urban", "rural"), output_pat
   file_path <- paste0(output_path, file_name)
   print(file_path)
   write.csv(summary_table, file_path, row.names = FALSE)
+  
+  
+  result_name <- paste0("summary_abs_error_", area_type)
+  result <- list()
+  result[[result_name]] <- summary_table
+  return(result)
+  
 
 }
 
@@ -77,8 +84,11 @@ summarise_hh_sizes <- function(df, area_type = c("urban", "rural")) {
     ) %>%
     filter(is.finite(Estimate)) %>%
     summarise(
-      Max = max(Estimate, na.rm = TRUE),
       Min = min(Estimate, na.rm = TRUE),
+      Quant_25 = quantile(Estimate, 0.25, na.rm = TRUE),
+      Median = quantile(Estimate, 0.5, na.rm = TRUE),
+      Quant_75 = quantile(Estimate, 0.75, na.rm = TRUE),
+      Max = max(Estimate, na.rm = TRUE),
       Sum_over_threshold = sum(Estimate > threshold, na.rm = TRUE),
       Sum_less_100hh = sum(Estimate < 100, na.rm = TRUE),
       Total = sum(Estimate > 0, na.rm = TRUE),
@@ -92,10 +102,15 @@ summarise_hh_sizes <- function(df, area_type = c("urban", "rural")) {
   print(file_path)
   write.csv(summary_table, file_path, row.names = FALSE)
   
+  result_name <- paste0("summary_hh_sizes_", area_type)
+  result <- list()
+  result[[result_name]] <- summary_table
+  return(result)
+  
 }
 
-summarise_hh_sizes_urban <- summarise_hh_sizes(urban_ratio, area_type = "urban")
-summarise_hh_sizes_rural <- summarise_hh_sizes(rural_ratio, area_type = "rural")
+summary_hh_sizes_urban <- summarise_hh_sizes(urban_ratio, area_type = "urban")
+summary_hh_sizes_rural <- summarise_hh_sizes(rural_ratio, area_type = "rural")
 
 
 
@@ -218,4 +233,49 @@ correlation_analysis <- function(df, area_type = c("urban", "rural"), save_plot 
 
 correlation_analysis(malawi_urban_ea_bldgs, area_type = "urban")
 correlation_analysis(malawi_rural_ea_bldgs, area_type = "rural")
+
+
+
+compare_ratio_worldpop <- function(df_smry, df_unit, area_type = c("urban", "rural"), save_plot = TRUE, output_dir = ".") {
+    
+  area_type <- match.arg(area_type)
+  
+  df_smry_to_plot <- df_smry %>%
+    select(Metric, Min, Quant_25, Median, Quant_75, Max) %>%
+    filter(Metric != "bldgs_ratio") %>%
+    pivot_longer(cols = c(Min, Quant_25, Median, Quant_75, Max),
+                 names_to = "Series",
+                 values_to = "Value"
+                 )
+  
+  
+  ggplot(df_smry_to_plot, aes(
+    x = factor(Series, levels = c("Min", "Quant_25", "Median", "Quant_75", "Max")),
+    y = Value, fill = Metric)) +
+    geom_bar(stat = "identity", position = position_dodge()) +
+    labs(title = "Summary statistics - EA household estimates from Ratio Change and WorldPop model",
+         x = NULL,
+         y = NULL) +
+    #scale_fill_manual(values = c("#1f5a73", "#e8742b")) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 18),
+      legend.title = element_blank(),
+      panel.grid.major.x = element_blank()
+    )
+  
+  
+  
+  
+}
+
+
+df_smry_to_plot <- summary_hh_sizes_urban[["summary_hh_sizes_urban"]] %>%
+  select(Metric, Min, Quant_25, Median, Quant_75, Max) %>%
+  filter(Metric != "bldgs_ratio") %>%
+  pivot_longer(cols = c(Min, Quant_25, Median, Quant_75, Max),
+               names_to = "Series",
+               values_to = "Value"
+  )
+
 
