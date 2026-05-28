@@ -321,5 +321,6 @@ compare_ratio_worldpop <- function(area_type = c("urban", "rural"), save_plot = 
 }
 
 compare_ratio_worldpop(area_type = "urban")
+compare_ratio_worldpop(area_type = "rural")
 
 
