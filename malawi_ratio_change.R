@@ -236,9 +236,23 @@ correlation_analysis(malawi_rural_ea_bldgs, area_type = "rural")
 
 
 
-compare_ratio_worldpop <- function(df_smry, df_unit, area_type = c("urban", "rural"), save_plot = TRUE, output_dir = ".") {
+compare_ratio_worldpop <- function(area_type = c("urban", "rural"), save_plot = TRUE, output_dir = ".") {
     
   area_type <- match.arg(area_type)
+  
+  if (area_type == "urban") {
+    
+    df_smry <- summary_hh_sizes_urban[["summary_hh_sizes_urban"]]
+    
+    df_unit <- urban_ratio
+    
+  } else {
+    
+    df_smry <- summary_hh_sizes_rural[["summary_hh_sizes_rural"]]
+    
+    df_unit <- rural_ratio
+    
+  } 
   
   df_smry_to_plot <- df_smry %>%
     select(Metric, Min, Quant_25, Median, Quant_75, Max) %>%
@@ -249,13 +263,13 @@ compare_ratio_worldpop <- function(df_smry, df_unit, area_type = c("urban", "rur
                  )
   
   
-  ggplot(df_smry_to_plot, aes(
+  p1 <- ggplot(df_smry_to_plot, aes(
     x = factor(Series, levels = c("Min", "Quant_25", "Median", "Quant_75", "Max")),
     y = Value, fill = Metric)) +
     geom_bar(stat = "identity", position = position_dodge()) +
     labs(title = "Summary statistics - EA household estimates from Ratio Change and WorldPop model",
          x = NULL,
-         y = NULL) +
+         y = "Num Households in EA") +
     #scale_fill_manual(values = c("#1f5a73", "#e8742b")) +
     theme_minimal() +
     theme(
@@ -265,17 +279,47 @@ compare_ratio_worldpop <- function(df_smry, df_unit, area_type = c("urban", "rur
     )
   
   
+  return(p1)
+  
+  df_plot <- df_unit |>
+    dplyr::filter(is.finite(census_ratio), is.finite(HH_Model))
+  
+  p2 <- ggplot(df_plot) +
+    
+    # Points
+    geom_point(aes(x = census_ratio, y = HH_Model), alpha = 0.8, colour = "red") +
+
+    # Regression lines
+    geom_smooth(aes(x = census_ratio, y = HH_Model),
+                method = "lm", se = FALSE, linetype = "dotted", colour = "blue") +
+    
+    # x = y line
+    
+    geom_abline(intercept = 0, slope = 1,
+                colour = "black", linetype = "solid", linewidth = 1) +
+    
+    
+    
+    # Labels
+    labs(
+      x = "Census ratio change estimate",
+      y = "WorldPop model estimate",
+      title = "EA estimates - ratio change plotted against WorldPop model estimates"
+    ) +
+    
+    
+    # Theme similar to your image
+    theme_minimal() +
+    theme(
+      legend.position = "right",
+      panel.grid.major = element_line(colour = "grey80")
+    )
+  
+  return(p2)
   
   
 }
 
-
-df_smry_to_plot <- summary_hh_sizes_urban[["summary_hh_sizes_urban"]] %>%
-  select(Metric, Min, Quant_25, Median, Quant_75, Max) %>%
-  filter(Metric != "bldgs_ratio") %>%
-  pivot_longer(cols = c(Min, Quant_25, Median, Quant_75, Max),
-               names_to = "Series",
-               values_to = "Value"
-  )
+compare_ratio_worldpop(area_type = "urban")
 
 
