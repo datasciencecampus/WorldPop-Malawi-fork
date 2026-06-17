@@ -42,6 +42,7 @@ rm(rural_urban, country, district, non_res); gc()
 #Load rasters and stack them in batches
 
 r1 <- terra::values(r1, dataframe = TRUE)
+settled_idx <- !is.na(r1$buildings_count_2023_glv2_5_t0_5_C_100m_v1)
 
 process_rasters_list <- list.files(path = covs_path_2024, pattern = ".tif$", full.names = TRUE)
 process_rasters_list
@@ -57,15 +58,13 @@ for (i in seq(1, length(process_rasters_list), batch_size)) {
   
   # Load batch of covariate rasters
   covs_raster <- rast(batch_covs)
+  names(covs_raster) <- tools::file_path_sans_ext(basename(batch_covs))
   
   # Get raster values
   covs_raster_values <- terra::values(covs_raster, dataframe = TRUE)
   
   #Write only settled pixels to file
-  covs_raster_values <- covs_raster_values |>  
-    cbind(r1) |>  
-    filter(!is.na(buildings_count_2023_glv2_5_t0_5_C_100m_v1)) |>  
-    select(-buildings_count_2023_glv2_5_t0_5_C_100m_v1)
+  covs_raster_values <- covs_raster_values[settled_idx, , drop = FALSE]
   
   # Write processed covariate values to a feather file
   feather_output_path <- paste0(output_path, "Processed_Covariates_", i, "_to_", min(i + batch_size - 1, length(process_rasters_list)), ".feather")
@@ -131,8 +130,8 @@ rm(bcount_values, coord); gc()
 
 #filter out unsettled pixels
 stack_coord <- stack_coord |>  
-  filter(!is.na(buildings_count_2023_glv2_5_t0_5_C_100m_v1)) |>  
-  select(-buildings_count_2023_glv2_5_t0_5_C_100m_v1)
+  dplyr::filter(!is.na(buildings_count_2023_glv2_5_t0_5_C_100m_v1)) |>  
+  dplyr::select(-buildings_count_2023_glv2_5_t0_5_C_100m_v1)
 
 #Cbind covs to other data
 prediction_covs <- cbind(stack_values, stack_coord, raster_values)
@@ -151,7 +150,7 @@ district <- ea |>
   group_by(DIST_NAME) |>
   mutate(dist_id = cur_group_id()) |>
   ungroup() |> 
-  select(dist_id, DIST_NAME) |> 
+  dplyr::select(dist_id, DIST_NAME) |> 
   distinct()
 
 #Create id for rural urban
@@ -161,7 +160,7 @@ rural_urban <- ea |>
     ADM_STATUS == "Rural" ~ 1,
     ADM_STATUS == "Urban" ~ 2,
     ADM_STATUS == "NA" ~ 1)) |> 
-  select(rural_urban_id, ADM_STATUS) |> 
+  dplyr::select(rural_urban_id, ADM_STATUS) |> 
   distinct()
 
 
@@ -175,7 +174,7 @@ prediction_covs1 <- prediction_covs |>
 prediction_covs1 <- prediction_covs1 |>  
   rename(long = x, lat = y,
          bcount = buildings_count_2023_glv2_5_t0_5_C_100m_v1) |>  
-  select(country_id,DIST_NAME, dist_id, hh_size, ADM_STATUS, rural_urban_id,
+  select(country_id,DIST_NAME, dist_id, mphc_mean_hh_size, ADM_STATUS, rural_urban_id,
          bcount, non_res_bcount, long, lat, starts_with("x"))  
  
 
