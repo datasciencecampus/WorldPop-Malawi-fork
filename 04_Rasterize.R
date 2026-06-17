@@ -117,7 +117,7 @@ writeRaster(district_raster, paste0(output_path, "district_raster.tif"),
 
 hh_ea <- st_transform(hh_ea, crs = st_crs(bcount))
 
-hh_raster<- rasterize(hh_ea, bcount, field = "hh_size")
+hh_raster<- rasterize(hh_ea, bcount, field = "mphc_mean_hh_size")
 plot(hh_raster)
 
 #stack rasters
@@ -125,7 +125,7 @@ stack_raster <- c(bcount, hh_raster)
 
 #Export raster
 writeRaster(hh_raster, paste0(output_path, "hh_raster.tif"), 
-            overwrite = T, names = "hh_size" )
+            overwrite = T, names = "mphc_mean_hh_size" )
 
 
 # Rasterize Commercial Buildings ------------------------------------------
