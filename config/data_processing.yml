@@ -1,0 +1,103 @@
+# Phase 1 frozen config schema for the data-processing refactor.
+# Source-specific column names are kept here because the input datasets do not
+# share a common schema and should be normalized without code edits.
+
+run:
+  timepoint: 2024
+  rebuild_mphc_gpkg: false
+  run_qa: true
+
+paths:
+  drive_path: ./data
+  mnso_data_dir: ./data/MNSO-Data
+  output_dir: ./data/Output_Data
+  shapefile_dir: ./data/Shapefiles
+  log_dir: ./logs
+
+profiles:
+  "2024":
+    shapefile_path: ./data/Shapefiles/2018_MPHC_EAs_Final_for_Use.shp
+    downstream_benchmark_csv: ./benchmarks/Malawi_2024_data.csv
+  "2018":
+    shapefile_path: ./data/Shapefiles/2018_MPHC_EAs_Final_for_Use.shp
+    downstream_benchmark_csv: ./benchmarks/Malawi_2018_data.csv
+
+sources:
+  mphc:
+    required: true
+    data_file: ./data/MNSO-Data/mphc2018Data_AllRegions.dta
+    household_id_col: hhnumber
+    longitude_col: hh_longitude
+    latitude_col: hh_latitude
+    district_col: district
+    ta_col: ta
+    ea_col: ea
+    sex_col: p03
+    age_col: p05
+  ict:
+    required: true
+    data_file: ./data/MNSO-Data/ICT Listing WorldPop.dta
+    source_ea_col: EA_Number
+    accuracy_col: GPS__Accuracy
+    longitude_col: GPS__Longitude
+    latitude_col: GPS__Latitude
+  ihs6:
+    required: true
+    data_file: ./data/MNSO-Data/IHS6 Listing WorldPop.dta
+    source_ea_col: EA_CODE
+    accuracy_col: GPS__Accuracy
+    longitude_col: GPS__Longitude
+    latitude_col: GPS__Latitude
+  naca:
+    required: true
+    data_file: ./data/MNSO-Data/Naca Listing WorldPop.dta
+    source_ea_col: EA_Number
+    accuracy_col: accuracy
+    longitude_col: longitude
+    latitude_col: latitude
+  dhs_listing:
+    required: true
+    data_file: ./data/MNSO-Data/FINAL MDHS LISTING DATA_Annon.dta
+    segmented_csv: ./data/MNSO-Data/DHS_Segmented_File.csv
+    cluster_id_col: QHCLUST
+    longitude_col: llongitude
+    latitude_col: llatitude
+  dhs_survey:
+    required: true
+    data_file: ./data/MNSO-Data/MDHS_2024_NoDZLK_anonymized.dta
+    cluster_id_col: QHCLUST
+    longitude_col: GHLONGITUDE
+    latitude_col: GHLATITUDE
+    household_id_col: QHNUMBER
+  zomba:
+    required: true
+    csv_dir: ./data/MNSO-Data/zomba_csv
+    output_file: ./data/Output_Data/zomba_rbind_data.csv
+    longitude_col: gps_longitude
+    latitude_col: gps_latitude
+    household_size_col: household_size
+  malemia:
+    required: true
+    data_file: ./data/MNSO-Data/malemia_hh_without_IDs.csv
+    longitude_col: hh_longitude
+    latitude_col: hh_latitude
+
+thresholds:
+  gps_accuracy_threshold_m: 5
+  dhs_max_distance_m: 5000
+
+outputs:
+  summarized_csv: ./data/Output_Data/summarized_survey_data.csv
+  hh_size_gpkg: ./data/Output_Data/hh_size_data.gpkg
+  zomba_rbind_csv: ./data/Output_Data/zomba_rbind_data.csv
+
+logging:
+  log_file_template: ./logs/log_<timestamp>.log
+  mirror_to_stdout: true
+
+qa:
+  baseline_summarized_csv: ./data/Output_Data/summarized_survey_data.csv
+  baseline_manifest: ./qa/baseline_manifest.md
+  baseline_metrics_json: ./qa/baseline_metrics.json
+  benchmark_malawi_2024_csv: ./benchmarks/Malawi_2024_data.csv
+  benchmark_malawi_2018_csv: ./benchmarks/Malawi_2018_data.csv
