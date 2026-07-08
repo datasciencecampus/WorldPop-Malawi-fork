@@ -24,6 +24,7 @@ load_libraries <- function(library_names) {
 required_libraries <- c(
   "sf", # package for handling spatial data
   "tidyverse", # tidyverse
+  "yaml", # config file parsing
   "haven", # package for import foreign statistical formats
   "terra", # package for spatial data analysis
   "tictoc", # package for timing R Scripts
