@@ -6,3 +6,10 @@
 *.Rproj
 
 data/*
+
+# Temporary measure, .github folder might be useful in the future for CICD 
+# workflows
+.github/*
+
+# Temporary measure, some data is stored in the forum of .json
+*.json
