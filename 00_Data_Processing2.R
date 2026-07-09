@@ -1,32 +1,126 @@
-# Summarizing data at the EA level using EA-CODE and Spatial location of the points
-# Should be run after 00_Data_Processing.R
-# NOTE: This is currently omitting the Zomba, Malemia and DHS Segmented data due to availability.
+#' Return a default when a local pipeline value is missing
+#'
+#' Used during pipeline setup to apply config-derived values when they are
+#' present and preserve a fallback when they are missing.
+#'
+#' @param value Candidate value.
+#' @param default_value Fallback value to use when value is missing.
+#'
+#' @return The original value or the supplied default.
+local_null_coalesce <- function(value, default_value) {
+  if (is.null(value) || length(value) == 0) {
+    return(default_value)
+  }
 
-#load packages
-library(sf)
-library(nngeo)
-library(haven)
-library(tidyverse)
-#library(foreign)
+  if (is.atomic(value) && length(value) == 1 && is.na(value)) {
+    return(default_value)
+  }
 
-source("utils.R")
+  value
+}
 
-options(scipen = 999) # turn off scientific notation for all variables
+if (!exists(".__WORLDPOP_PIPELINE_EXECUTION__", inherits = FALSE)) {
+  #' Run the main data-processing implementation with a normalized config
+  #'
+  #' Re-sources this file inside an isolated execution environment so the main
+  #' processing script can be called from the wrapper while keeping its
+  #' intermediate objects local to one run.
+  #'
+  #' @param config Normalized pipeline config.
+  #' @param run_qa Logical flag indicating whether QA was requested by the
+  #'   wrapper.
+  #' @param log_state Optional active log state.
+  #'
+  #' @return The pipeline result list, invisibly.
+  run_data_processing_pipeline <- function(config, run_qa = FALSE, log_state = NULL) {
+    project_root <- local_null_coalesce(config$project_root, getwd())
+    pipeline_env <- new.env(parent = globalenv())
+    pipeline_env$.__WORLDPOP_PIPELINE_EXECUTION__ <- TRUE
+    pipeline_env$config <- config
+    pipeline_env$run_qa <- isTRUE(run_qa)
+    pipeline_env$log_state <- log_state
+    pipeline_env$project_root <- project_root
+    pipeline_env$local_null_coalesce <- local_null_coalesce
 
-#Specify Drive Path
-drive_path <- "./data"
-input_path <- file.path(drive_path, "MNSO-Data")
-output_path <- file.path(drive_path, "Output_Data")
-shapefile_path <- file.path(drive_path, "Shapefiles")
+    if (exists("log_pipeline_event", mode = "function")) {
+      pipeline_env$log_pipeline_event <- get("log_pipeline_event", mode = "function")
+    }
 
-#Load datasets
-mphc_2018 <- read_dta(file.path(input_path, "mphc2018Data_AllRegions.dta"))
-ICT_data <- read_dta(file.path(input_path, "ICT Listing WorldPop.dta"))
-IHS6_data <- read_dta(file.path(input_path, "IHS6 Listing WorldPop.dta"))
-Naca_data <- read_dta(file.path(input_path, "Naca Listing WorldPop.dta"))
-ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use.shp")) # replaces "2018_MPHC_EAs_Final_for_Use_Corrected.shp"
-dhs_data <- read_dta(file.path(input_path, "MDHS_2024_NoDZLK_anonymized.dta"))
-dhs_listing <- read_dta(file.path(input_path, "FINAL MDHS LISTING DATA_Annon.dta"))
+    sys.source(file.path(project_root, "00_Data_Processing2.R"), envir = pipeline_env)
+    invisible(local_null_coalesce(pipeline_env$pipeline_result, NULL))
+  }
+} else {
+  # Summarizing data at the EA level using EA-CODE and Spatial location of the points
+  # Should be run after 00_Data_Processing.R
+  # NOTE: This is currently omitting the Zomba, Malemia and DHS Segmented data due to availability.
+
+  #load packages
+  library(sf)
+  library(nngeo)
+  library(haven)
+  library(tidyverse)
+  #library(foreign)
+
+  source(file.path(project_root, "utils.R"))
+
+  options(scipen = 999) # turn off scientific notation for all variables
+
+  #' Emit a pipeline message through the shared logging hook
+  #'
+  #' @param message_text Message body to emit.
+  #' @param level Severity label.
+  #'
+  #' @return The formatted log message, invisibly.
+  pipeline_log <- function(message_text, level = "INFO") {
+    if (exists("log_pipeline_event", mode = "function")) {
+      log_pipeline_event(message_text, level = level, state = log_state)
+    } else {
+      message(sprintf("[%s] %s", level, message_text))
+    }
+  }
+
+  drive_path <- local_null_coalesce(config$paths$drive_path, file.path(project_root, "data"))
+  input_path <- local_null_coalesce(config$paths$mnso_data_dir, file.path(drive_path, "MNSO-Data"))
+  output_path <- local_null_coalesce(config$paths$output_dir, file.path(drive_path, "Output_Data"))
+  shapefile_path <- local_null_coalesce(
+    config$paths$shapefile_path,
+    local_null_coalesce(
+      config$profiles[[as.character(config$run$timepoint)]]$shapefile_path,
+      file.path(local_null_coalesce(config$paths$shapefile_dir, file.path(drive_path, "Shapefiles")), "2018_MPHC_EAs_Final_for_Use.shp")
+    )
+  )
+  gps_accuracy_threshold_m <- local_null_coalesce(config$thresholds$gps_accuracy_threshold_m, 5)
+  dhs_max_distance_m <- local_null_coalesce(config$thresholds$dhs_max_distance_m, 5000)
+  mphc_data_file <- local_null_coalesce(config$sources$mphc$data_file, file.path(input_path, "mphc2018Data_AllRegions.dta"))
+  ict_data_file <- local_null_coalesce(config$sources$ict$data_file, file.path(input_path, "ICT Listing WorldPop.dta"))
+  ihs6_data_file <- local_null_coalesce(config$sources$ihs6$data_file, file.path(input_path, "IHS6 Listing WorldPop.dta"))
+  naca_data_file <- local_null_coalesce(config$sources$naca$data_file, file.path(input_path, "Naca Listing WorldPop.dta"))
+  dhs_survey_data_file <- local_null_coalesce(config$sources$dhs_survey$data_file, file.path(input_path, "MDHS_2024_NoDZLK_anonymized.dta"))
+  dhs_listing_data_file <- local_null_coalesce(config$sources$dhs_listing$data_file, file.path(input_path, "FINAL MDHS LISTING DATA_Annon.dta"))
+  dhs_segmented_csv_file <- local_null_coalesce(config$sources$dhs_listing$segmented_csv, file.path(input_path, "DHS_Segmented_File.csv"))
+  zomba_csv_dir <- local_null_coalesce(config$sources$zomba$csv_dir, file.path(input_path, "zomba_csv"))
+  zomba_output_csv <- local_null_coalesce(config$outputs$zomba_rbind_csv, file.path(output_path, "zomba_rbind_data.csv"))
+  malemia_data_file <- local_null_coalesce(config$sources$malemia$data_file, file.path(input_path, "malemia_hh_without_IDs.csv"))
+  summarized_output_csv <- local_null_coalesce(config$outputs$summarized_csv, file.path(output_path, "summarized_survey_data.csv"))
+  hh_size_output_gpkg <- local_null_coalesce(config$outputs$hh_size_gpkg, file.path(output_path, "hh_size_data.gpkg"))
+
+  output_dirs <- unique(dirname(c(zomba_output_csv, summarized_output_csv, hh_size_output_gpkg)))
+  for (output_dir in output_dirs) {
+    if (!dir.exists(output_dir)) {
+      dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+    }
+  }
+
+  pipeline_log(paste("Running data processing pipeline for timepoint", config$run$timepoint, "with QA requested =", isTRUE(run_qa)))
+
+  #Load datasets
+  mphc_2018 <- read_dta(mphc_data_file)
+  ICT_data <- read_dta(ict_data_file)
+  IHS6_data <- read_dta(ihs6_data_file)
+  Naca_data <- read_dta(naca_data_file)
+  ea <- st_read(shapefile_path) # replaces "2018_MPHC_EAs_Final_for_Use_Corrected.shp"
+  dhs_data <- read_dta(dhs_survey_data_file)
+  dhs_listing <- read_dta(dhs_listing_data_file)
 
 
 #####################################################################################
@@ -385,7 +479,7 @@ summary(ICT_sf$GPS__Accuracy)
 
 #filter out point more than 
 ICT_greater <- ICT_sf %>%  
-  filter(GPS__Accuracy > 5)
+  filter(GPS__Accuracy > gps_accuracy_threshold_m)
 
 #summarize hh count
 ICT_greater <- ICT_greater %>%  
@@ -397,7 +491,7 @@ sum(ICT_greater$ict_hh_count)
 
 #filter out point less than 5
 ICT_less <- ICT_sf %>%  
-  filter(GPS__Accuracy < 5)
+  filter(GPS__Accuracy < gps_accuracy_threshold_m)
 
 #summarize hh count
 ICT_less <- ICT_less %>%  
@@ -479,7 +573,7 @@ summary(IHS_sf$GPS__Accuracy)
 
 #filter out point more than 
 IHS_greater <- IHS_sf %>%  
-  filter(GPS__Accuracy > 5)
+  filter(GPS__Accuracy > gps_accuracy_threshold_m)
 
 #summarize hh count
 IHS_greater <- IHS_greater %>%  
@@ -491,7 +585,7 @@ sum(IHS_greater$ihs_hh_count)
 
 #filter out point less than 5
 IHS_less <- IHS_sf %>%  
-  filter(GPS__Accuracy < 5)
+  filter(GPS__Accuracy < gps_accuracy_threshold_m)
 
 #summarize hh count
 IHS_less <- IHS_less %>%  
@@ -559,7 +653,7 @@ summary(Naca_sf$accuracy)
 
 #filter out point more than 
 Naca_greater <- Naca_sf %>%  
-  filter(accuracy > 5)
+  filter(accuracy > gps_accuracy_threshold_m)
 
 #summarize hh count
 Naca_greater <- Naca_greater %>%  
@@ -569,7 +663,7 @@ Naca_greater <- Naca_greater %>%
 
 #filter out point less than 5
 Naca_less <- Naca_sf %>%  
-  filter(accuracy < 5)
+  filter(accuracy < gps_accuracy_threshold_m)
 
 #summarize hh count
 Naca_less <- Naca_less %>%  
@@ -597,7 +691,7 @@ sum(Naca_data$hh_count)
 # Data sent by NSO was "MDHS 2024 HH_Listing_EA.xlxs" which is in "MNSO-Data". This
 # file was converted to csv, called "DHS_Segmented_File.csv" and added to Output_data
 
-dhs_file_path <- file.path(input_path, "DHS_Segmented_File.csv")
+dhs_file_path <- dhs_segmented_csv_file
 if (!file.exists(dhs_file_path)) {
   print("'DHS_Segmented_File.csv' cannot be found. Skipping processing of this data.")
   
@@ -677,7 +771,7 @@ distances <- sapply(nearest$dist, function(x) x[1])
 dhs_centroids_sf <- dhs_centroids_sf %>%
   mutate(
     nearest_dist_m = distances,
-    within_5km = ifelse(nearest_dist_m < 5000, 1, 2)
+    within_5km = ifelse(nearest_dist_m < dhs_max_distance_m, 1, 2)
   )
 
 #drop point more than 5km
@@ -702,7 +796,7 @@ dhs_hh_count<-  dhs_centroids_sf %>%
 #####################################################################################
 ####################################################################################
 ######### PROCESS DHS SUrvey DATA ################################################ 
-dhs_data <- read_dta(file.path(input_path, "MDHS_2024_NoDZLK_anonymized.dta"))
+dhs_data <- read_dta(dhs_survey_data_file)
 
 #Calculate hh size per hh
 dhs_size <- dhs_data %>%
@@ -760,7 +854,7 @@ distances <- sapply(nearest$dist, function(x) x[1])
 dhs_centroids_sf <- dhs_centroids_sf %>%
   mutate(
     nearest_dist_m = distances,
-    within_5km = ifelse(nearest_dist_m < 5000, 1, 2)
+    within_5km = ifelse(nearest_dist_m < dhs_max_distance_m, 1, 2)
   )
 
 #drop point more than 5km
@@ -789,11 +883,11 @@ dhs_hh_size<-  dhs_centroids_sf %>%
 
 # NSO has given 14 csvs that need to be rbound - function in utils.R
 rbind_zomba_csvs(
-    csv_dir = file.path(input_path, "zomba_csv"),
-    output_file = file.path(output_path,"zomba_rbind_data.csv")
+  csv_dir = zomba_csv_dir,
+  output_file = zomba_output_csv
 )
 
-zomba_data_path <- file.path(output_path, "zomba_rbind_data.csv")
+zomba_data_path <- zomba_output_csv
 
 if (file.exists(zomba_data_path)){
   zomba_data <- read.csv(zomba_data_path)
@@ -848,7 +942,7 @@ if (file.exists(zomba_data_path)){
 ####################################################################################
 ######### PROCESS MALEMA DISTRICT DATA ################################################ 
 
-malemia_data_path <- file.path(input_path, "malemia_hh_without_IDs.csv")
+malemia_data_path <- malemia_data_file
 
 if (file.exists(malemia_data_path)) {
   malemia_data <- read.csv(malemia_data_path)
@@ -961,7 +1055,7 @@ combined_data <- combined_data %>%
 
 #Write to file
 
-write.csv(combined_data, file.path(output_path, "summarized_survey_data.csv"), row.names = F)
+write.csv(combined_data, summarized_output_csv, row.names = FALSE)
 
 
 #join combined data to EA shapefile and export
@@ -980,9 +1074,17 @@ hh_ea <- hh_ea %>%
   select(EA_CODE, mphc_total_pop, mphc_median_hh_size, mphc_mean_hh_size)
 
 #write to file
-st_write(hh_ea, file.path(output_path, "hh_size_data.gpkg"), append = T)
+st_write(hh_ea, hh_size_output_gpkg, append = T)
+
+pipeline_result <- list(
+  combined_data = combined_data,
+  summarized_csv = summarized_output_csv,
+  hh_size_gpkg = hh_size_output_gpkg,
+  run_qa_requested = isTRUE(run_qa)
+)
 
 
 #################### END OF SCRIPT #########################################
 ###########################################################################
+}
 
