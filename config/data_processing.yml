@@ -17,10 +17,8 @@ paths:
 profiles:
   "2024":
     shapefile_path: ./data/Shapefiles/2018_MPHC_EAs_Final_for_Use.shp
-    downstream_benchmark_csv: ./benchmarks/Malawi_2024_data.csv
   "2018":
     shapefile_path: ./data/Shapefiles/2018_MPHC_EAs_Final_for_Use.shp
-    downstream_benchmark_csv: ./benchmarks/Malawi_2018_data.csv
 
 sources:
   mphc:
@@ -97,7 +95,7 @@ logging:
 
 qa:
   baseline_summarized_csv: ./data/Output_Data/summarized_survey_data.csv
-  baseline_manifest: ./qa/baseline_manifest.md
-  baseline_metrics_json: ./qa/baseline_metrics.json
-  benchmark_malawi_2024_csv: ./benchmarks/Malawi_2024_data.csv
-  benchmark_malawi_2018_csv: ./benchmarks/Malawi_2018_data.csv
+  baseline_manifest: ./data/qa/baseline_manifest.md
+  baseline_summary_markdown: ./data/qa/baseline_metrics.md
+  baseline_missing_values_csv: ./data/qa/baseline_missing_values.csv
+  baseline_numeric_summaries_csv: ./data/qa/baseline_numeric_summaries.csv
