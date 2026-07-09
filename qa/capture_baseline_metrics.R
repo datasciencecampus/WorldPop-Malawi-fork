@@ -22,91 +22,6 @@ format_scalar <- function(value) {
   as.character(value)
 }
 
-# Escape text for the lightweight JSON serializer below.
-json_escape <- function(text) {
-  text <- gsub("\\\\", "\\\\\\\\", text)
-  text <- gsub('"', '\\"', text)
-  text <- gsub("\n", "\\n", text)
-  text <- gsub("\r", "\\r", text)
-  text <- gsub("\t", "\\t", text)
-  text
-}
-
-is_named_list <- function(value) {
-  is.list(value) && !is.null(names(value)) && all(nzchar(names(value)))
-}
-
-# Serialize a nested R object to JSON without introducing an additional dependency.
-to_json <- function(value, indent = 0) {
-  indent_prefix <- paste(rep("  ", indent), collapse = "")
-  next_indent_prefix <- paste(rep("  ", indent + 1), collapse = "")
-
-  if (is.null(value)) {
-    return("null")
-  }
-
-  if (is.list(value)) {
-    if (length(value) == 0) {
-      return(if (is_named_list(value)) "{}" else "[]")
-    }
-
-    if (is_named_list(value)) {
-      json_entries <- vapply(
-        names(value),
-        function(name) {
-          paste0(
-            next_indent_prefix,
-            '"',
-            json_escape(name),
-            '": ',
-            to_json(value[[name]], indent + 1)
-          )
-        },
-        character(1)
-      )
-
-      return(paste0("{\n", paste(json_entries, collapse = ",\n"), "\n", indent_prefix, "}"))
-    }
-
-    json_values <- vapply(
-      value,
-      function(entry) paste0(next_indent_prefix, to_json(entry, indent + 1)),
-      character(1)
-    )
-
-    return(paste0("[\n", paste(json_values, collapse = ",\n"), "\n", indent_prefix, "]"))
-  }
-
-  if (is.character(value)) {
-    if (length(value) == 1) {
-      return(paste0('"', json_escape(value), '"'))
-    }
-    return(to_json(as.list(value), indent))
-  }
-
-  if (is.logical(value)) {
-    if (length(value) == 1) {
-      if (is.na(value)) {
-        return("null")
-      }
-      return(tolower(as.character(value)))
-    }
-    return(to_json(as.list(value), indent))
-  }
-
-  if (is.numeric(value) || is.integer(value)) {
-    if (length(value) == 1) {
-      if (is.na(value) || !is.finite(value)) {
-        return("null")
-      }
-      return(format(value, scientific = FALSE, trim = TRUE))
-    }
-    return(to_json(as.list(value), indent))
-  }
-
-  paste0('"', json_escape(as.character(value)), '"')
-}
-
 # Build a small summary pack for numeric columns that are useful in QA review.
 build_numeric_summary <- function(values) {
   numeric_values <- suppressWarnings(as.numeric(values))
@@ -133,14 +48,71 @@ build_numeric_summary <- function(values) {
   )
 }
 
+# Build a tidy table that records missingness for every column in the baseline CSV.
+build_missing_values_table <- function(data_frame) {
+  missing_value_count <- colSums(is.na(data_frame))
+  non_missing_value_count <- nrow(data_frame) - missing_value_count
+
+  output <- data.frame(
+    column_name = names(data_frame),
+    missing_value_count = unname(missing_value_count),
+    non_missing_value_count = unname(non_missing_value_count),
+    missing_value_rate = if (nrow(data_frame) == 0) {
+      rep(NA_real_, length(missing_value_count))
+    } else {
+      unname(missing_value_count) / nrow(data_frame)
+    },
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  )
+
+  output[order(output$missing_value_count, decreasing = TRUE), , drop = FALSE]
+}
+
+# Build a flat table of numeric summaries that can be reviewed without JSON parsing.
+build_numeric_summary_table <- function(data_frame, column_names) {
+  if (length(column_names) == 0) {
+    return(data.frame(
+      column_name = character(0),
+      non_na_count = numeric(0),
+      min = numeric(0),
+      median = numeric(0),
+      mean = numeric(0),
+      max = numeric(0),
+      sum = numeric(0),
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    ))
+  }
+
+  output <- lapply(column_names, function(column_name) {
+    summary_values <- build_numeric_summary(data_frame[[column_name]])
+    data.frame(
+      column_name = column_name,
+      non_na_count = summary_values$non_na_count,
+      min = summary_values$min,
+      median = summary_values$median,
+      mean = summary_values$mean,
+      max = summary_values$max,
+      sum = summary_values$sum,
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )
+  })
+
+  do.call(rbind, output)
+}
+
 # Render the metrics object into a reviewer-friendly Markdown report.
-build_markdown_summary <- function(metrics) {
+build_markdown_summary <- function(metrics, missing_values_table, numeric_summary_table, source_columns) {
   lines <- c(
     "# Baseline Metrics Summary",
     "",
-    paste0("- Generated at UTC: `", metrics$generated_at_utc, "`"),
+    paste0("- Generated at GMT: `", metrics$generated_at_gmt, "`"),
     paste0("- Input CSV: `", metrics$input_csv, "`"),
-    paste0("- JSON output: `", metrics$output_json, "`"),
+    paste0("- Markdown output: `", metrics$output_summary, "`"),
+    paste0("- Missing values CSV: `", metrics$output_missing_values_csv, "`"),
+    paste0("- Numeric summaries CSV: `", metrics$output_numeric_summaries_csv, "`"),
     "",
     "## Headline metrics",
     "",
@@ -152,44 +124,41 @@ build_markdown_summary <- function(metrics) {
     paste0("| Total NA count | ", format_scalar(metrics$total_na_count), " |")
   )
 
-  na_counts <- unlist(metrics$per_column_na_counts, use.names = TRUE)
-  na_counts <- sort(na_counts, decreasing = TRUE)
-  non_zero_na_counts <- na_counts[na_counts > 0]
+  non_zero_na_counts <- missing_values_table[missing_values_table$missing_value_count > 0, , drop = FALSE]
 
   lines <- c(lines, "", "## Columns with missing values", "")
-  if (length(non_zero_na_counts) == 0) {
+  if (nrow(non_zero_na_counts) == 0) {
     lines <- c(lines, "No columns contain missing values in the baseline CSV.")
   } else {
     lines <- c(lines, "| Column | Missing values |", "|--------|----------------|")
     lines <- c(
       lines,
       vapply(
-        names(non_zero_na_counts),
-        function(column_name) paste0("| `", column_name, "` | ", format_scalar(non_zero_na_counts[[column_name]]), " |"),
+        seq_len(nrow(non_zero_na_counts)),
+        function(index) paste0("| `", non_zero_na_counts$column_name[[index]], "` | ", format_scalar(non_zero_na_counts$missing_value_count[[index]]), " |"),
         character(1)
       )
     )
   }
 
-  source_counts <- unlist(metrics$source_column_non_na_counts, use.names = TRUE)
+  source_coverage_table <- missing_values_table[missing_values_table$column_name %in% source_columns, c("column_name", "non_missing_value_count"), drop = FALSE]
   lines <- c(lines, "", "## Source coverage", "")
-  if (length(source_counts) == 0) {
+  if (nrow(source_coverage_table) == 0) {
     lines <- c(lines, "No source coverage columns were present in the baseline CSV.")
   } else {
     lines <- c(lines, "| Source column | Non-missing rows |", "|---------------|------------------|")
     lines <- c(
       lines,
       vapply(
-        names(source_counts),
-        function(column_name) paste0("| `", column_name, "` | ", format_scalar(source_counts[[column_name]]), " |"),
+        seq_len(nrow(source_coverage_table)),
+        function(index) paste0("| `", source_coverage_table$column_name[[index]], "` | ", format_scalar(source_coverage_table$non_missing_value_count[[index]]), " |"),
         character(1)
       )
     )
   }
 
-  numeric_summaries <- metrics$key_numeric_summaries
   lines <- c(lines, "", "## Key numeric summaries", "")
-  if (length(numeric_summaries) == 0) {
+  if (nrow(numeric_summary_table) == 0) {
     lines <- c(lines, "No key numeric columns were present in the baseline CSV.")
   } else {
     lines <- c(
@@ -200,17 +169,16 @@ build_markdown_summary <- function(metrics) {
     lines <- c(
       lines,
       vapply(
-        names(numeric_summaries),
-        function(column_name) {
-          summary_values <- numeric_summaries[[column_name]]
+        seq_len(nrow(numeric_summary_table)),
+        function(index) {
           paste0(
-            "| `", column_name, "` | ",
-            format_scalar(summary_values$non_na_count), " | ",
-            format_scalar(summary_values$min), " | ",
-            format_scalar(summary_values$median), " | ",
-            format_scalar(summary_values$mean), " | ",
-            format_scalar(summary_values$max), " | ",
-            format_scalar(summary_values$sum), " |"
+            "| `", numeric_summary_table$column_name[[index]], "` | ",
+            format_scalar(numeric_summary_table$non_na_count[[index]]), " | ",
+            format_scalar(numeric_summary_table$min[[index]]), " | ",
+            format_scalar(numeric_summary_table$median[[index]]), " | ",
+            format_scalar(numeric_summary_table$mean[[index]]), " | ",
+            format_scalar(numeric_summary_table$max[[index]]), " | ",
+            format_scalar(numeric_summary_table$sum[[index]]), " |"
           )
         },
         character(1)
@@ -223,8 +191,9 @@ build_markdown_summary <- function(metrics) {
 
 # Resolve input and output paths, then load the frozen benchmark CSV.
 input_csv <- get_arg_value("--input", file.path("data", "Output_Data", "summarized_survey_data.csv"))
-output_json <- get_arg_value("--output", file.path("qa", "baseline_metrics.json"))
-output_summary <- get_arg_value("--summary", file.path("qa", "baseline_metrics.md"))
+output_summary <- get_arg_value("--summary", file.path("data", "qa", "baseline_metrics.md"))
+output_missing_values_csv <- get_arg_value("--missing-values-csv", file.path("data", "qa", "baseline_missing_values.csv"))
+output_numeric_summaries_csv <- get_arg_value("--numeric-summaries-csv", file.path("data", "qa", "baseline_numeric_summaries.csv"))
 
 if (!file.exists(input_csv)) {
   stop("Baseline CSV does not exist: ", input_csv)
@@ -262,27 +231,16 @@ key_numeric_columns <- intersect(
 )
 
 # Capture completeness metrics for the full file plus source-specific coverage.
-per_column_na_counts <- as.list(unname(colSums(is.na(baseline_data))))
-names(per_column_na_counts) <- names(baseline_data)
+missing_values_table <- build_missing_values_table(baseline_data)
+numeric_summary_table <- build_numeric_summary_table(baseline_data, key_numeric_columns)
 
-source_column_non_na_counts <- as.list(vapply(
-  source_columns,
-  function(column_name) sum(!is.na(baseline_data[[column_name]])),
-  numeric(1)
-))
-names(source_column_non_na_counts) <- source_columns
-
-key_numeric_summaries <- lapply(key_numeric_columns, function(column_name) {
-  build_numeric_summary(baseline_data[[column_name]])
-})
-names(key_numeric_summaries) <- key_numeric_columns
-
-# Store the machine-readable metric payload that later QA steps can consume.
+# Store the headline metrics used in the human-readable outputs.
 metrics <- list(
-  generated_at_utc = format(Sys.time(), tz = "UTC", usetz = TRUE),
+  generated_at_gmt = format(Sys.time(), tz = "GMT", usetz = TRUE),
   input_csv = normalizePath(input_csv, winslash = "/", mustWork = FALSE),
-  output_json = normalizePath(output_json, winslash = "/", mustWork = FALSE),
   output_summary = normalizePath(output_summary, winslash = "/", mustWork = FALSE),
+  output_missing_values_csv = normalizePath(output_missing_values_csv, winslash = "/", mustWork = FALSE),
+  output_numeric_summaries_csv = normalizePath(output_numeric_summaries_csv, winslash = "/", mustWork = FALSE),
   row_count = nrow(baseline_data),
   column_count = ncol(baseline_data),
   columns = as.list(names(baseline_data)),
@@ -291,31 +249,27 @@ metrics <- list(
   } else {
     NULL
   },
-  total_na_count = sum(is.na(baseline_data)),
-  per_column_na_counts = per_column_na_counts,
-  source_column_non_na_counts = source_column_non_na_counts,
-  key_numeric_summaries = key_numeric_summaries
+  total_na_count = sum(is.na(baseline_data))
 )
 
-# Ensure both output directories exist before writing the JSON and Markdown artifacts.
-output_dir <- dirname(output_json)
-if (!dir.exists(output_dir)) {
-  dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+# Ensure all output directories exist before writing the Markdown and CSV artifacts.
+output_paths <- c(output_summary, output_missing_values_csv, output_numeric_summaries_csv)
+output_dirs <- unique(dirname(output_paths))
+for (output_dir in output_dirs) {
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+  }
 }
 
-writeLines(to_json(metrics), con = output_json, useBytes = TRUE)
-
-summary_dir <- dirname(output_summary)
-if (!dir.exists(summary_dir)) {
-  dir.create(summary_dir, recursive = TRUE, showWarnings = FALSE)
-}
-
-writeLines(build_markdown_summary(metrics), con = output_summary, useBytes = TRUE)
+utils::write.csv(missing_values_table, file = output_missing_values_csv, row.names = FALSE)
+utils::write.csv(numeric_summary_table, file = output_numeric_summaries_csv, row.names = FALSE)
+writeLines(build_markdown_summary(metrics, missing_values_table, numeric_summary_table, source_columns), con = output_summary, useBytes = TRUE)
 
 message(
   "Baseline metrics written. Rows=", metrics$row_count,
   ", Columns=", metrics$column_count,
   ", Total NAs=", metrics$total_na_count,
-  ". JSON: ", output_json,
-  ". Summary: ", output_summary
+  ". Summary: ", output_summary,
+  ". Missing values CSV: ", output_missing_values_csv,
+  ". Numeric summaries CSV: ", output_numeric_summaries_csv
 )
