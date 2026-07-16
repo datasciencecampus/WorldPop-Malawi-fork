@@ -280,6 +280,9 @@ final_formula <- as.formula(formula_string)
 print(final_formula)
 
 #function to drop non-significant variables
+# Ortis code: different covariates tested: x19 + x26 + x36 + x37 + x39 + x40 + 
+#                                x43 + x46 + x48 + x50 + x52 + x54 + x55 + x56 + x57 + x60 + 
+#                                x61 + x62"
 # Start with full model
 current_formula <- as.formula("hh_density ~ x13 + x24 + x32 + x38 + x39 + x40 + 
     x41 + x44 + x45 + x47 + x49 + x51 + x53 + x55 + x56 + x61 + 
@@ -327,6 +330,8 @@ covs_selection1 <- covs_selection %>%
   drop_na() 
 
 #Lasso Regression
+# Ortis code: there were diffferent covariates that went into testing: x19 + x26 + x36 + x40 + x43 + x46 + x48 + x54 + 
+#    x55 + x57 + x60 + x61 + x62
 fit1_lasso <- train(
   hh_density ~ x13 + x32 + x38 + x39 + x40 + x41 + x44 + x45 + 
     x47 + x49 + x55 + x56 + x61 + x63,
@@ -349,6 +354,7 @@ plot(varImp(fit1_lasso))
 
 
 #Selected covariates for final modelling
+# Ortis code: the same covariates were chosen in the end
 #x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61
 
 #select important variables from pop_data and cbind scaled covariates for model fitting
