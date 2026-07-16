@@ -146,9 +146,10 @@ if (file.exists(non_res_path)) {
     as_tibble()
 }
 
-#convert pop data to character
+#convert pop data to character and remove duplicates
 pop_data <- pop_data |> 
-  mutate(EA_CODE = as.character(EA_CODE))
+  mutate(EA_CODE = as.character(EA_CODE)) |> 
+  distinct(EA_CODE, .keep_all = TRUE)  # Ensure one row per EA_CODE to prevent join multiplication
 
 #join pop_data to ea data
 ea_2024 <- ea_2024 |> 
@@ -271,9 +272,10 @@ if (file.exists(non_res_path)) {
   
 }
 
-#convert pop data to character
+#convert pop data to character and remove duplicates
 pop_data <- pop_data |> 
-  mutate(EA_CODE = as.character(EA_CODE))
+  mutate(EA_CODE = as.character(EA_CODE)) |> 
+  distinct(EA_CODE, .keep_all = TRUE)  # Ensure one row per EA_CODE to prevent join multiplication
 
 #join pop_data to ea data
 ea_2018 <- ea_2018 |> 
