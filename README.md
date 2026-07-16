@@ -10,7 +10,7 @@ This is the `ons-compatability-updates` branch, which includes updates for compa
 
 ## Dependencies
 
-To install all required packages, run this in your R console:
+To install required packages, run this in your R console:
 
 ``` r
 install.packages(c("tidyverse", "sf", "tictoc", "terra", "exactextractr", "haven", "nngeo", "INLA", "gstat", "spdep", "car", "caret", "kableExtra", "inlabru", "feather", "raster", "glmnet"))
