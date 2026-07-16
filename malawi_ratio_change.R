@@ -3,6 +3,7 @@ library(tidyverse)
 library(ggplot2)
 
 #Load data files
+setwd("D:/Malawi/WorldPop-Malawi-fork/")
 drive_path <- "./data/ratio_change_data/"
 input_path <- paste0(drive_path, "Input_Data/")
 output_path <- paste0(drive_path, "Output_Data/")
@@ -12,6 +13,7 @@ malawi_urban_ea_bldgs <- read.csv(paste0(input_path, "malawi_urban_ea_bldgs.csv"
 malawi_rural_ea_bldgs <- read.csv(paste0(input_path, "malawi_rural_ea_bldgs.csv"))
 
 
+  
 
 #Function to calculate ratio change
 
@@ -22,7 +24,13 @@ ratio_change <- function(df) {
       bldgs_ratio = bldgs_2023/bldgs_2018,
       census_ratio = as.numeric(census_hh) * bldgs_ratio,
       model_abs_error = abs(HH_Model - as.numeric(survey_hh)),
-      ratio_abs_error = abs(census_ratio - as.numeric(survey_hh))
+      ratio_abs_error = abs(census_ratio - as.numeric(survey_hh)),
+      bldgs_tmpl_ratio = bldgs_2023_tmpl/bldgs_2018_tmpl,
+      census_ratio_tmpl = as.numeric(census_hh) * bldgs_tmpl_ratio,
+      ratio_tmpl_abs_error = abs(census_ratio_tmpl - as.numeric(survey_hh)),
+      area_ratio = bldgs_area_2023/bldgs_area_2018,
+      census_ratio_area = as.numeric(census_hh) * area_ratio,
+      ratio_area_abs_error = abs(census_ratio_area - as.numeric(survey_hh))
     )
 }
 
@@ -39,7 +47,7 @@ summarise_abs_errors <- function(df, area_type = c("urban", "rural"), output_pat
   
   summary_table <- df %>%
     pivot_longer(
-      cols = c(model_abs_error, ratio_abs_error),
+      cols = c(model_abs_error, ratio_abs_error, ratio_tmpl_abs_error, ratio_area_abs_error),
       names_to = "Method",
       values_to = "abs_error"
     ) %>%
@@ -78,7 +86,7 @@ summarise_hh_sizes <- function(df, area_type = c("urban", "rural")) {
   
   summary_table <- df %>%
     pivot_longer(
-      cols = c(HH_Model, census_ratio, bldgs_ratio),
+      cols = c(HH_Model, census_ratio, census_ratio_tmpl, bldgs_ratio, bldgs_tmpl_ratio, ratio_area_abs_error),
       names_to = "Metric",
       values_to = "Estimate"
     ) %>%
