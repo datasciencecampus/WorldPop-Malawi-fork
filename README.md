@@ -13,8 +13,24 @@ This is the `ons-compatability-updates` branch, which includes updates for compa
 To install required packages, run this in your R console:
 
 ``` r
-install.packages(c("tidyverse", "sf", "tictoc", "terra", "exactextractr", "haven", "nngeo", "INLA", "gstat", "spdep", "car", "caret", "kableExtra", "inlabru", "feather", "raster", "glmnet"))
+install.packages(c("tidyverse", "sf", "tictoc", "terra", "exactextractr", "haven", "nngeo", "gstat", "spdep", "car", "caret", "kableExtra", "inlabru", "feather", "raster", "glmnet"))
 ```
+
+INLA installation:
+1. Download the zip build matching your R minor version (4.5):
+https://inla.r-inla-download.org/R/stable/bin/windows/contrib/4.5/
+
+2. In R, install with:
+install.packages(
+"C:/Users/xxxx/Downloads/INLA_25.10.19.zip",
+repos = NULL,
+type = "win.binary"
+)
+
+3. Verify:
+library(INLA)
+packageVersion("INLA")
+inla.getOption("inla.call")
 
 ## Data Pre-processing
 
