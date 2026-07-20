@@ -10,11 +10,27 @@ This is the `ons-compatability-updates` branch, which includes updates for compa
 
 ## Dependencies
 
-To install all required packages, run this in your R console:
+To install required packages, run this in your R console:
 
 ``` r
-install.packages(c("tidyverse", "sf", "tictoc", "terra", "exactextractr", "haven", "nngeo", "INLA", "gstat", "spdep", "car", "caret", "kableExtra", "inlabru", "feather", "raster", "glmnet"))
+install.packages(c("tidyverse", "sf", "tictoc", "terra", "exactextractr", "haven", "nngeo", "gstat", "spdep", "car", "caret", "kableExtra", "inlabru", "feather", "raster", "glmnet"))
 ```
+
+INLA installation:
+1. Download the zip build matching your R minor version (4.5):
+https://inla.r-inla-download.org/R/stable/bin/windows/contrib/4.5/
+
+2. In R, install with:
+install.packages(
+"C:/Users/xxxx/Downloads/INLA_25.10.19.zip",
+repos = NULL,
+type = "win.binary"
+)
+
+3. Verify:
+library(INLA)
+packageVersion("INLA")
+inla.getOption("inla.call")
 
 ## Data Pre-processing
 
@@ -28,7 +44,8 @@ Run the following scripts in order for a typical workflow:
 4.  `01_Raster_Mosaicking_Workflow_2024.R` - successfully run
 5.  `00_Data_Processing.R` - successfully run
 6.  `00_Data_Processing2.R` - successfully run
-7.  `04_Rasterize.R` - mostly not used except for "# Rasterize Country" (line 47)
+7.  `04_Rasterize.R` - successfully run
+8.  `04_Covs_Stack_Raster_cropping.R` - successfully run
 8.  `02_Covariates_Extraction.R` - successfully run - with caveat modified to work without data created in `04_Rasterize.R`
 
 ## Modelling scripts

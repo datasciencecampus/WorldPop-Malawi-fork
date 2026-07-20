@@ -1,6 +1,5 @@
 # Summarizing data at the EA level using EA-CODE and Spatial location of the points
 # Should be run after 00_Data_Processing.R
-# NOTE: This is currently omitting the Zomba, Malemia and DHS Segmented data due to availability.
 
 #load packages
 library(sf)

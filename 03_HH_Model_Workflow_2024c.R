@@ -20,7 +20,7 @@ options(scipen = 999) # turn off scientific notation for all variables
 #Specify Drive Path
 drive_path <- "./data/"
 input_path <- paste0(drive_path, "Output_Data/")
-shapefile_path <- paste0(drive_path, "Input_Data/Shapefiles/")
+shapefile_path <- paste0(drive_path, "Shapefiles/")
 output_path <- paste0(drive_path, "Output_Data/")
 output_path1 <- paste0(drive_path, "Output_Data/Pop_Rasters/")
 
@@ -39,7 +39,7 @@ pop_data <- pop_data %>%
   mutate(rural_urban_id = case_when(
     ADM_STATUS == "Rural" ~ 1,
     ADM_STATUS == "Urban" ~ 2,
-    ADM_STATUS == "NA" ~ 1))
+    ADM_STATUS == "NA" ~ 1)) # lake Malawi shows as NA in the shapefile but is rural so assign to rural
 
 #summarize 
 summary(pop_data$observed_hh_count)
@@ -280,10 +280,13 @@ final_formula <- as.formula(formula_string)
 print(final_formula)
 
 #function to drop non-significant variables
+# Ortis code: different covariates tested: x19 + x26 + x36 + x37 + x39 + x40 + 
+#                                x43 + x46 + x48 + x50 + x52 + x54 + x55 + x56 + x57 + x60 + 
+#                                x61 + x62"
 # Start with full model
-current_formula <- as.formula("hh_density ~ x19 + x26 + x36 + x37 + x39 + x40 + 
-                                x43 + x46 + x48 + x50 + x52 + x54 + x55 + x56 + x57 + x60 + 
-                                x61 + x62")
+current_formula <- as.formula("hh_density ~ x13 + x24 + x32 + x38 + x39 + x40 + 
+    x41 + x44 + x45 + x47 + x49 + x51 + x53 + x55 + x56 + x61 + 
+    x63")
 
 # Loop to drop non-significant variables
 repeat {
@@ -327,9 +330,11 @@ covs_selection1 <- covs_selection %>%
   drop_na() 
 
 #Lasso Regression
+# Ortis code: there were diffferent covariates that went into testing: x19 + x26 + x36 + x40 + x43 + x46 + x48 + x54 + 
+#    x55 + x57 + x60 + x61 + x62
 fit1_lasso <- train(
-  hh_density ~ x19 + x26 + x36 + x40 + x43 + x46 + x48 + x54 + 
-    x55 + x57 + x60 + x61 + x62,
+  hh_density ~ x13 + x32 + x38 + x39 + x40 + x41 + x44 + x45 + 
+    x47 + x49 + x55 + x56 + x61 + x63,
   data = covs_selection1,
   method = "glmnet",
   metric = "RMSE",  # Choose from RMSE, RSquared, AIC, BIC, ...others?
@@ -349,6 +354,7 @@ plot(varImp(fit1_lasso))
 
 
 #Selected covariates for final modelling
+# Ortis code: the same covariates were chosen in the end
 #x13 + x44 + x47 + x45 + x39 + x49 + x56 + x61
 
 #select important variables from pop_data and cbind scaled covariates for model fitting
@@ -617,7 +623,7 @@ summary(dist(coords)) #summarizes the Euclidean distance between points in the s
 
 #build non-convex hull mesh
 non_convex_bdry <- inla.nonconvex.hull(coords, -0.03, -0.05, resolution = c(100, 100))
-mesh <- fm_mesh_2d_inla(boundary = non_convex_bdry, max.edge=c(0.1, 1), 
+mesh <- fmesher::fm_mesh_2d_inla(boundary = non_convex_bdry, max.edge=c(0.1, 1), 
                         offset = c(0.05, 1),
                         cutoff = 0.003)
 
