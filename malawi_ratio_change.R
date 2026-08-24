@@ -3,7 +3,6 @@ library(tidyverse)
 library(ggplot2)
 
 #Load data files
-setwd("D:/Malawi/WorldPop-Malawi-fork/")
 drive_path <- "./data/ratio_change_data/"
 input_path <- paste0(drive_path, "Input_Data/")
 output_path <- paste0(drive_path, "Output_Data/")
@@ -13,14 +12,21 @@ malawi_urban_ea_bldgs <- read.csv(paste0(input_path, "malawi_urban_ea_bldgs.csv"
 malawi_rural_ea_bldgs <- read.csv(paste0(input_path, "malawi_rural_ea_bldgs.csv"))
 
 
-  
-
-#Function to calculate ratio change
-
+#' Calculate household ratio-change metrics and absolute errors
+#'
+#' Computes building-based ratio estimates and compares them against
+#' survey household counts using multiple methods.
+#'
+#' @param df A data frame containing building, census, model, and survey columns.
+#'
+#' @return A data frame with additional ratio and absolute error columns.
+#'
+#' @examples
+#' # result <- ratio_change(malawi_urban_ea_bldgs)
 ratio_change <- function(df) {
   
   df %>%
-    mutate(
+    dplyr::mutate(
       bldgs_ratio = bldgs_2023/bldgs_2018,
       census_ratio = as.numeric(census_hh) * bldgs_ratio,
       model_abs_error = abs(HH_Model - as.numeric(survey_hh)),
@@ -36,6 +42,14 @@ ratio_change <- function(df) {
 
 urban_ratio <- ratio_change(malawi_urban_ea_bldgs)
 rural_ratio <- ratio_change(malawi_rural_ea_bldgs)
+
+combined_ratio <- dplyr::bind_rows(
+  dplyr::mutate(urban_ratio, area_type = "urban"),
+  dplyr::mutate(rural_ratio, area_type = "rural")
+)
+
+write.csv(combined_ratio, paste0(output_path, "combined_urban_rural_ratio_change.csv"), row.names = FALSE)
+
 
 
 #Summarise performance
