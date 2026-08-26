@@ -40,3 +40,6 @@ The important script in this section is `03_HH_Model_Workflow_2024.R`
 ## Additional Resources
 
 -   [Full Project Wiki](https://github.com/datasciencecampus/WorldPop-Malawi-fork/wiki)
+
+## Ratio change method
+- [Ratio change Wiki](https://github.com/datasciencecampus/WorldPop-Malawi-fork/wiki/Ratio-change-metadata)
