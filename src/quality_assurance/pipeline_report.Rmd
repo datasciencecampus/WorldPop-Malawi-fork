@@ -1,0 +1,910 @@
+---
+title: "WorldPop Malawi — Pipeline Run Report"
+date: "`r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+output:
+  html_document:
+    theme: flatly
+    highlight: tango
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    self_contained: true
+params:
+  run_timestamp:   NULL
+  timepoint:       NULL
+  log_file:        NULL
+  qa_summary_csv:  NULL
+  qa_column_report_csv: NULL
+  qa_duplicate_csv: NULL
+  config_path:              NULL
+  transformation_stats_csv: NULL
+---
+
+```{css, echo=FALSE}
+/* ---- status badges ---- */
+.badge-pass    { background:#27ae60; color:#fff; padding:6px 14px; border-radius:4px; font-size:1.1em; font-weight:bold; }
+.badge-fail    { background:#e74c3c; color:#fff; padding:6px 14px; border-radius:4px; font-size:1.1em; font-weight:bold; }
+.badge-skipped { background:#95a5a6; color:#fff; padding:6px 14px; border-radius:4px; font-size:1.1em; font-weight:bold; }
+.badge-warn    { background:#f39c12; color:#fff; padding:6px 14px; border-radius:4px; font-size:1.1em; font-weight:bold; }
+
+/* ---- log styling ---- */
+.log-block     { font-family: monospace; font-size: 0.82em; background:#1e1e1e; color:#d4d4d4;
+                 padding:12px; border-radius:4px; max-height:360px; overflow-y:auto; }
+.log-error     { color:#f44747; font-weight:bold; }
+.log-warn      { color:#ce9178; }
+.log-info      { color:#9cdcfe; }
+
+/* ---- QA table highlight ---- */
+.tbl-pass td   { background:#eafaf1; }
+.tbl-fail td   { background:#fdedec; }
+
+/* ---- pipeline script section headers ---- */
+h2 { border-top: 3px solid #2980b9; padding-top: 14px; margin-top: 36px; }
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(dplyr)
+library(knitr)
+library(kableExtra)
+library(haven)
+library(yaml)
+library(ggplot2)
+
+# ── Helper: load a csv or return empty tibble ──────────────────────────────────
+load_or_empty <- function(path, ...) {
+  if (!is.null(path) && file.exists(path)) read.csv(path, stringsAsFactors = FALSE, ...)
+  else tibble::tibble()
+}
+
+# ── Load QA artefacts from paths passed via params ────────────────────────────
+qa_summary_raw  <- load_or_empty(params$qa_summary_csv)
+qa_col_raw      <- load_or_empty(params$qa_column_report_csv)
+qa_dup_raw      <- load_or_empty(params$qa_duplicate_csv)
+
+# ── Resolve project root from the Rmd's own location (always src/quality_assurance/)
+# This is reliable regardless of working directory or how render() was called.
+rmd_dir      <- normalizePath(dirname(knitr::current_input()), winslash = "/", mustWork = FALSE)
+project_root <- normalizePath(file.path(rmd_dir, "../.."), winslash = "/", mustWork = FALSE)
+config_file  <- if (!is.null(params$config_path) && file.exists(params$config_path)) {
+  params$config_path
+} else {
+  file.path(project_root, "src", "config.yaml")
+}
+
+# ── Load shared pipeline utilities (make_ea_code etc.) ───────────────────────
+source(file.path(project_root, "utils.R"))
+
+# ── Load config and resolve paths ─────────────────────────────────────────────
+if (file.exists(config_file)) {
+  cfg          <- yaml::read_yaml(config_file)
+  resolve_path <- function(p) {
+    if (is.null(p)) return(NULL)
+    normalizePath(file.path(project_root, sub("^\\./", "", p)), mustWork = FALSE, winslash = "/")
+  }
+  data_dir      <- resolve_path(cfg$paths$drive_path)
+  mnso_dir      <- file.path(data_dir, cfg$paths$mnso_data_dir)
+  config_loaded <- TRUE
+} else {
+  cfg <- NULL; data_dir <- NULL; mnso_dir <- NULL; config_loaded <- FALSE
+}
+
+# ── Load log file from path passed via params ──────────────────────────────────
+if (!is.null(params$log_file) && file.exists(params$log_file)) {
+  raw_log_lines <- readLines(params$log_file)
+} else {
+  raw_log_lines <- c()
+}
+
+# Classify each log line
+classify_log <- function(lines) {
+  if (length(lines) == 0) return(data.frame(level = character(0), text = character(0), stringsAsFactors = FALSE))
+  lvl <- dplyr::case_when(
+    grepl("^ERROR|\\bERROR\\b", lines) ~ "ERROR",
+    grepl("^WARN|\\bWARN\\b",   lines) ~ "WARN",
+    TRUE                               ~ "INFO"
+  )
+  data.frame(level = lvl, text = lines, stringsAsFactors = FALSE)
+}
+log_df <- classify_log(raw_log_lines)
+
+n_errors <- sum(log_df$level == "ERROR")
+n_warns  <- sum(log_df$level == "WARN")
+
+# Overall status from QA
+overall_status <- if (nrow(qa_summary_raw) == 0) "SKIPPED" else {
+  statuses <- unique(qa_summary_raw$status)
+  if ("FAIL" %in% statuses) "FAIL" else if ("PASS" %in% statuses) "PASS" else "SKIPPED"
+}
+
+status_badge_class <- switch(overall_status,
+  PASS    = "badge-pass",
+  FAIL    = "badge-fail",
+  SKIPPED = "badge-skipped"
+)
+```
+
+---
+
+## Run summary
+
+```{r run-summary-table}
+tibble::tibble(
+  Field = c("Timestamp", "Timepoint", "Log errors", "Log warnings", "Quality Assurance status"),
+  Value = c(
+    params$run_timestamp,
+    params$timepoint,
+    as.character(n_errors),
+    as.character(n_warns),
+    overall_status
+  )
+) %>%
+  kable(col.names = NULL) %>%
+  kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE) %>%
+  row_spec(5, bold = TRUE,
+    background = switch(overall_status, PASS = "#eafaf1", FAIL = "#fdedec", "#f5f5f5"))
+```
+
+**Overall Quality Assurance status:** <span class="`r status_badge_class`">`r overall_status`</span>
+
+---
+
+## 1 — Raster_Mosaicking_Buildings
+
+> *Source data profile and Quality Assurance for this script are not yet implemented.*
+
+---
+
+## 2 — Raster_Mosaicking_Workflow
+
+> *Source data profile and Quality Assurance for this script are not yet implemented.*
+
+---
+
+## 3 — Data_Processing
+
+> *Source data profile and Quality Assurance for this script are not yet implemented.*
+
+---
+
+## 4 — Data_Processing2
+
+### Source data profile
+
+#### Input files (from config)
+
+```{r config-file-list}
+if (!config_loaded) {
+  cat("_Config not available._")
+} else {
+  tibble::tibble(
+    Source = c(
+      "EA shapefile",
+      "MPHC census",
+      "ICT listing",
+      "IHS6 listing",
+      "NACA listing",
+      "DHS listing",
+      "DHS segmented clusters",
+      "DHS survey",
+      "Zomba CSVs",
+      "Malemia"
+    ),
+    `File / Folder` = c(
+      "2018_MPHC_EAs_Final_for_Use.shp",
+      basename(cfg$sources$mphc$data_file),
+      basename(cfg$sources$ict$data_file),
+      basename(cfg$sources$ihs6$data_file),
+      basename(cfg$sources$naca$data_file),
+      basename(cfg$sources$dhs_listing$data_file),
+      basename(cfg$sources$dhs_listing$segmented_csv),
+      basename(cfg$sources$dhs_survey$data_file),
+      cfg$sources$zomba$csv_dir,
+      basename(cfg$sources$malemia$data_file)
+    )
+  ) %>%
+    kable() %>%
+    kable_styling(bootstrap_options = c("condensed", "hover", "striped"), full_width = FALSE)
+}
+```
+
+#### EA shapefile — spatial reference
+
+```{r ea-shp-load, include=FALSE}
+ea_shp_available <- FALSE
+n_total_eas <- NA_integer_
+if (config_loaded) {
+  shp_dir  <- normalizePath(file.path(project_root, sub("^\\./", "", cfg$paths$drive_path),
+                                       cfg$paths$shapefile_dir), mustWork = FALSE, winslash = "/")
+  shp_path <- file.path(shp_dir, "2018_MPHC_EAs_Final_for_Use.shp")
+  if (file.exists(shp_path)) {
+    ea_shp <- sf::st_read(shp_path, quiet = TRUE)
+    ea_shp_available <- TRUE
+    n_total_eas <- n_distinct(ea_shp$EA_CODE)
+  }
+}
+```
+
+```{r ea-shp-shape}
+if (!ea_shp_available) {
+  cat("_Shapefile not available at render time._")
+} else {
+  n_feat   <- nrow(ea_shp)
+  n_codes  <- n_distinct(ea_shp$EA_CODE)
+  n_dup    <- n_feat - n_codes
+  tibble::tibble(
+    Metric = c("Total EA features", "Unique EA_CODEs", "Duplicate EA_CODEs", "CRS"),
+    Value  = c(
+      format(n_feat,  big.mark = ","),
+      format(n_codes, big.mark = ","),
+      ifelse(n_dup > 0, paste0(format(n_dup, big.mark = ","), " ⚠"), "None"),
+      sf::st_crs(ea_shp)$input
+    )
+  ) %>%
+    kable(col.names = NULL) %>%
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE) %>%
+    row_spec(which(n_dup > 0), background = "#fdedec")
+}
+```
+
+#### DHS segmented clusters — reference filter
+
+```{r seg-csv-load, include=FALSE}
+seg_csv_available <- FALSE
+if (config_loaded && !is.null(cfg$sources$dhs_listing$segmented_csv)) {
+  seg_path <- file.path(mnso_dir, cfg$sources$dhs_listing$segmented_csv)
+  if (file.exists(seg_path)) {
+    seg_raw <- read.csv(seg_path, stringsAsFactors = FALSE)
+    seg_csv_available <- TRUE
+  }
+}
+```
+
+```{r seg-csv-shape}
+if (!seg_csv_available) {
+  cat("_Segmented CSV not available at render time._")
+} else {
+  n_total  <- nrow(seg_raw)
+  n_nonseg <- sum(grepl("^no\\b", seg_raw$Cluster.Segmented, ignore.case = TRUE))
+  n_seg    <- n_total - n_nonseg
+  tibble::tibble(
+    Metric = c("Total clusters", "Non-segmented (used in pipeline)", "Segmented (excluded)"),
+    Value  = c(
+      format(n_total,  big.mark = ","),
+      format(n_nonseg, big.mark = ","),
+      format(n_seg,    big.mark = ",")
+    )
+  ) %>%
+    kable(col.names = NULL) %>%
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE) %>%
+    row_spec(3, background = "#fff3cd")
+}
+```
+
+#### mphc — Census 2018
+
+```{r mphc-load, include=FALSE}
+mphc_available <- FALSE
+if (config_loaded && !is.null(cfg$sources$mphc)) {
+  mphc_cfg  <- cfg$sources$mphc
+  mphc_path <- file.path(mnso_dir, mphc_cfg$data_file)
+  if (file.exists(mphc_path)) {
+    key_cols <- c(
+      mphc_cfg$household_id_col, mphc_cfg$longitude_col,
+      mphc_cfg$latitude_col,     mphc_cfg$district_col,
+      mphc_cfg$ta_col,           mphc_cfg$ea_col
+    )
+    mphc_raw <- haven::read_dta(mphc_path, col_select = all_of(key_cols)) %>%
+      mutate(district_name = as.character(haven::as_factor(.data[[mphc_cfg$district_col]]))) %>%
+      haven::zap_labels() %>%
+      mutate(
+        EA_CODE = make_ea_code(
+          .data[[mphc_cfg$district_col]],
+          .data[[mphc_cfg$ta_col]],
+          .data[[mphc_cfg$ea_col]]
+        )
+      )
+    mphc_hh <- mphc_raw %>%
+      distinct(EA_CODE, !!sym(mphc_cfg$household_id_col), .keep_all = TRUE)
+    mphc_available <- TRUE
+  }
+}
+```
+
+```{r mphc-shape}
+if (!mphc_available) {
+  cat("_Source file not available at render time._")
+} else {
+  lon      <- mphc_hh[[mphc_cfg$longitude_col]]
+  lat      <- mphc_hh[[mphc_cfg$latitude_col]]
+  n_hh     <- nrow(mphc_hh)
+  n_miss   <- sum(is.na(lon) | is.na(lat))
+  pct_miss <- round(n_miss / n_hh * 100, 1)
+  tibble::tibble(
+    Metric = c("Unique households (EA + hhnumber)", "Unique EAs (composite EA_CODE)", "Missing lon, lat, or both"),
+    Value  = c(
+      format(n_hh,                              big.mark = ","),
+      format(n_distinct(mphc_raw[["EA_CODE"]]), big.mark = ","),
+      paste0(format(n_miss, big.mark = ","), " (", pct_miss, "%)") 
+    )
+  ) %>%
+    kable(col.names = NULL) %>%
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
+}
+```
+
+#### ict — ICT Listing Survey
+
+```{r ict-load, include=FALSE}
+ict_available <- FALSE
+if (config_loaded && !is.null(cfg$sources$ict)) {
+  ict_cfg  <- cfg$sources$ict
+  ict_path <- file.path(mnso_dir, ict_cfg$data_file)
+  if (file.exists(ict_path)) {
+    ict_raw <- haven::read_dta(ict_path) %>% haven::zap_labels()
+    ict_available <- TRUE
+  }
+}
+```
+
+```{r ict-shape}
+if (!ict_available) {
+  cat("_Source file not available at render time._")
+} else {
+  lon     <- ict_raw[[ict_cfg$longitude_col]]
+  lat     <- ict_raw[[ict_cfg$latitude_col]]
+  n       <- nrow(ict_raw)
+  n_miss  <- sum(is.na(lon) | is.na(lat))
+  pct_miss <- round(n_miss / n * 100, 1)
+  tibble::tibble(
+    Metric = c("Total household listings", "Unique EAs (reported)", "Missing lon, lat, or both"),
+    Value  = c(
+      format(n,       big.mark = ","),
+      format(n_distinct(ict_raw[[ict_cfg$source_ea_col]]), big.mark = ","),
+      paste0(format(n_miss, big.mark = ","), " (", pct_miss, "%)")
+    )
+  ) %>%
+    kable(col.names = NULL) %>%
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
+}
+```
+
+#### ihs6 — IHS6 Listing Survey
+
+```{r ihs6-load, include=FALSE}
+ihs6_available <- FALSE
+if (config_loaded && !is.null(cfg$sources$ihs6)) {
+  ihs6_cfg  <- cfg$sources$ihs6
+  ihs6_path <- file.path(mnso_dir, ihs6_cfg$data_file)
+  if (file.exists(ihs6_path)) {
+    ihs6_raw <- haven::read_dta(ihs6_path) %>% haven::zap_labels()
+    ihs6_available <- TRUE
+  }
+}
+```
+
+```{r ihs6-shape}
+if (!ihs6_available) {
+  cat("_Source file not available at render time._")
+} else {
+  lon     <- ihs6_raw[[ihs6_cfg$longitude_col]]
+  lat     <- ihs6_raw[[ihs6_cfg$latitude_col]]
+  n       <- nrow(ihs6_raw)
+  n_miss  <- sum(is.na(lon) | is.na(lat))
+  pct_miss <- round(n_miss / n * 100, 1)
+  tibble::tibble(
+    Metric = c("Total household listings", "Unique EAs (reported)", "Missing lon, lat, or both"),
+    Value  = c(
+      format(n,       big.mark = ","),
+      format(n_distinct(ihs6_raw[[ihs6_cfg$source_ea_col]]), big.mark = ","),
+      paste0(format(n_miss, big.mark = ","), " (", pct_miss, "%)")
+    )
+  ) %>%
+    kable(col.names = NULL) %>%
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
+}
+```
+
+#### naca — NACA Listing Survey
+
+```{r naca-load, include=FALSE}
+naca_available <- FALSE
+if (config_loaded && !is.null(cfg$sources$naca)) {
+  naca_cfg  <- cfg$sources$naca
+  naca_path <- file.path(mnso_dir, naca_cfg$data_file)
+  if (file.exists(naca_path)) {
+    naca_raw <- haven::read_dta(naca_path) %>% haven::zap_labels()
+    naca_available <- TRUE
+  }
+}
+```
+
+```{r naca-shape}
+if (!naca_available) {
+  cat("_Source file not available at render time._")
+} else {
+  lon      <- naca_raw[[naca_cfg$longitude_col]]
+  lat      <- naca_raw[[naca_cfg$latitude_col]]
+  n        <- nrow(naca_raw)
+  n_miss   <- sum(is.na(lon) | is.na(lat))
+  pct_miss <- round(n_miss / n * 100, 1)
+  tibble::tibble(
+    Metric = c("Total household listings", "Unique EAs (reported)", "Missing lon, lat, or both"),
+    Value  = c(
+      format(n, big.mark = ","),
+      format(n_distinct(naca_raw[[naca_cfg$source_ea_col]]), big.mark = ","),
+      paste0(format(n_miss, big.mark = ","), " (", pct_miss, "%)")
+    )
+  ) %>%
+    kable(col.names = NULL) %>%
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
+}
+```
+
+#### dhs_listing — DHS Listing Survey
+
+```{r dhs-listing-load, include=FALSE}
+dhs_listing_available <- FALSE
+if (config_loaded && !is.null(cfg$sources$dhs_listing)) {
+  dhs_listing_cfg  <- cfg$sources$dhs_listing
+  dhs_listing_path <- file.path(mnso_dir, dhs_listing_cfg$data_file)
+  if (file.exists(dhs_listing_path)) {
+    dhs_listing_raw <- haven::read_dta(dhs_listing_path) %>% haven::zap_labels()
+    dhs_listing_available <- TRUE
+  }
+}
+```
+
+```{r dhs-listing-shape}
+if (!dhs_listing_available) {
+  cat("_Source file not available at render time._")
+} else {
+  lon      <- dhs_listing_raw[[dhs_listing_cfg$longitude_col]]
+  lat      <- dhs_listing_raw[[dhs_listing_cfg$latitude_col]]
+  n        <- nrow(dhs_listing_raw)
+  n_miss   <- sum(is.na(lon) | is.na(lat))
+  pct_miss <- round(n_miss / n * 100, 1)
+  tibble::tibble(
+    Metric = c("Total household listings", "Unique clusters (QHCLUST)", "Missing lon, lat, or both"),
+    Value  = c(
+      format(n, big.mark = ","),
+      format(n_distinct(dhs_listing_raw[[dhs_listing_cfg$cluster_id_col]]), big.mark = ","),
+      paste0(format(n_miss, big.mark = ","), " (", pct_miss, "%)")
+    )
+  ) %>%
+    kable(col.names = NULL) %>%
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
+}
+```
+
+#### dhs_survey — DHS Household Survey
+
+```{r dhs-survey-load, include=FALSE}
+dhs_survey_available <- FALSE
+if (config_loaded && !is.null(cfg$sources$dhs_survey)) {
+  dhs_survey_cfg  <- cfg$sources$dhs_survey
+  dhs_survey_path <- file.path(mnso_dir, dhs_survey_cfg$data_file)
+  if (file.exists(dhs_survey_path)) {
+    dhs_survey_raw <- haven::read_dta(dhs_survey_path) %>% haven::zap_labels()
+    dhs_survey_available <- TRUE
+  }
+}
+```
+
+```{r dhs-survey-shape}
+if (!dhs_survey_available) {
+  cat("_Source file not available at render time._")
+} else {
+  lon      <- dhs_survey_raw[[dhs_survey_cfg$longitude_col]]
+  lat      <- dhs_survey_raw[[dhs_survey_cfg$latitude_col]]
+  n        <- nrow(dhs_survey_raw)
+  n_miss   <- sum(is.na(lon) | is.na(lat))
+  pct_miss <- round(n_miss / n * 100, 1)
+  n_hh     <- n_distinct(paste0(
+    dhs_survey_raw[[dhs_survey_cfg$cluster_id_col]], "_",
+    dhs_survey_raw[[dhs_survey_cfg$household_id_col]]
+  ))
+  tibble::tibble(
+    Metric = c("Unique households (cluster + QHNUMBER)", "Unique clusters (QHCLUST)", "Missing lon, lat, or both"),
+    Value  = c(
+      format(n_hh, big.mark = ","),
+      format(n_distinct(dhs_survey_raw[[dhs_survey_cfg$cluster_id_col]]), big.mark = ","),
+      paste0(format(n_miss, big.mark = ","), " (", pct_miss, "%)")
+    )
+  ) %>%
+    kable(col.names = NULL) %>%
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
+}
+```
+
+#### zomba — Zomba District Listing
+
+```{r zomba-load, include=FALSE}
+zomba_available <- FALSE
+if (config_loaded && !is.null(cfg$sources$zomba)) {
+  zomba_cfg  <- cfg$sources$zomba
+  zomba_dir  <- file.path(data_dir, cfg$paths$mnso_data_dir, zomba_cfg$csv_dir)
+  if (dir.exists(zomba_dir)) {
+    csv_files  <- list.files(zomba_dir, pattern = "\\.csv$", full.names = TRUE, ignore.case = TRUE)
+    if (length(csv_files) > 0) {
+      zomba_raw <- bind_rows(lapply(csv_files, function(f) {
+        d <- read.csv(f, stringsAsFactors = FALSE, check.names = FALSE)
+        names(d) <- gsub("\\s+", "_", tolower(trimws(names(d))))
+        d
+      }))
+      zomba_available <- TRUE
+    }
+  }
+}
+```
+
+```{r zomba-shape}
+if (!zomba_available) {
+  cat("_Source files not available at render time._")
+} else {
+  lon      <- zomba_raw[[zomba_cfg$longitude_col]]
+  lat      <- zomba_raw[[zomba_cfg$latitude_col]]
+  n        <- nrow(zomba_raw)
+  n_miss   <- sum(is.na(lon) | is.na(lat))
+  pct_miss <- round(n_miss / n * 100, 1)
+  tibble::tibble(
+    Metric = c("CSV source files", "Total rows (all files combined)", "Missing lon, lat, or both"),
+    Value  = c(
+      format(length(csv_files), big.mark = ","),
+      format(n, big.mark = ","),
+      paste0(format(n_miss, big.mark = ","), " (", pct_miss, "%)")
+    )
+  ) %>%
+    kable(col.names = NULL) %>%
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
+}
+```
+
+#### malemia — Malemia Household Survey
+
+```{r malemia-load, include=FALSE}
+malemia_available <- FALSE
+if (config_loaded && !is.null(cfg$sources$malemia)) {
+  malemia_cfg  <- cfg$sources$malemia
+  malemia_path <- file.path(mnso_dir, malemia_cfg$data_file)
+  if (file.exists(malemia_path)) {
+    malemia_raw  <- read.csv(malemia_path, stringsAsFactors = FALSE)
+    malemia_available <- TRUE
+  }
+}
+```
+
+```{r malemia-shape}
+if (!malemia_available) {
+  cat("_Source file not available at render time._")
+} else {
+  lon      <- malemia_raw[[malemia_cfg$longitude_col]]
+  lat      <- malemia_raw[[malemia_cfg$latitude_col]]
+  n        <- nrow(malemia_raw)
+  n_miss   <- sum(is.na(lon) | is.na(lat))
+  pct_miss <- round(n_miss / n * 100, 1)
+  tibble::tibble(
+    Metric = c("Total rows", "Missing lon, lat, or both"),
+    Value  = c(
+      format(n, big.mark = ","),
+      paste0(format(n_miss, big.mark = ","), " (", pct_miss, "%)")
+    )
+  ) %>%
+    kable(col.names = NULL) %>%
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
+}
+```
+
+### Processing thresholds (from config)
+
+```{r config-thresholds}
+if (!config_loaded) {
+  cat("_Config not available._")
+} else {
+  tibble::tibble(
+    Threshold = c(
+      "GPS accuracy threshold",
+      "DHS max cluster distance"
+    ),
+    Value = c(
+      paste0(cfg$thresholds$gps_accuracy_threshold_m, " m — GPS points with accuracy > this value are treated as inaccurate and not used for spatial reassignment"),
+      paste0(format(cfg$thresholds$dhs_max_distance_m, big.mark = ","), " m — DHS clusters further than this from an EA centroid are excluded")
+    )
+  ) %>%
+    kable(col.names = NULL) %>%
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
+}
+```
+
+### Data transformations
+
+```{r transform-load, include=FALSE}
+# Load transformation stats written by pipeline
+transform_csv_path <- if (!is.null(params$transformation_stats_csv) &&
+                          file.exists(params$transformation_stats_csv)) {
+  params$transformation_stats_csv
+} else if (config_loaded) {
+  normalizePath(
+    file.path(project_root, sub("^\\./", "", cfg$paths$drive_path),
+              "quality_assurance", "data_processing2_transformation_stats.csv"),
+    mustWork = FALSE, winslash = "/"
+  )
+} else NULL
+
+transform_stats_available <- !is.null(transform_csv_path) && file.exists(transform_csv_path)
+if (transform_stats_available) transform_raw <- read.csv(transform_csv_path, stringsAsFactors = FALSE)
+
+# Load output CSV for EA coverage
+output_csv_path <- if (config_loaded) {
+  normalizePath(
+    file.path(project_root, sub("^\\./", "", cfg$outputs$data_processing2_summarized_csv)),
+    mustWork = FALSE, winslash = "/"
+  )
+} else NULL
+output_coverage_available <- !is.null(output_csv_path) && file.exists(output_csv_path) && ea_shp_available
+if (output_coverage_available) output_csv <- read.csv(output_csv_path, stringsAsFactors = FALSE)
+```
+
+#### GPS-based EA assignment (ICT, IHS6, NACA)
+
+```{r transform-gps}
+if (!transform_stats_available) {
+  cat("_Transformation stats not available — run the pipeline to generate them._")
+} else {
+  threshold <- if (config_loaded) cfg$thresholds$gps_accuracy_threshold_m else "?"
+  gps_tbl <- transform_raw %>%
+    filter(source %in% c("ict", "ihs6", "naca")) %>%
+    mutate(
+      Source = toupper(source),
+      `No GPS` = format(n_no_gps, big.mark = ","),
+      `Inaccurate GPS (> threshold)` =
+        paste0(format(n_inaccurate_gps, big.mark = ","),
+               " (", round(n_inaccurate_gps / n_total * 100, 1), "%)"),
+      `Accurate GPS (<= threshold, reassigned)` =
+        paste0(format(n_accurate_gps, big.mark = ","),
+               " (", round(n_accurate_gps / n_total * 100, 1), "%)"),
+      `EAs changed by reassignment` =
+        ifelse(n_accurate_gps > 0,
+          paste0(format(n_ea_changed, big.mark = ","),
+                 " (", round(n_ea_changed / n_accurate_gps * 100, 1), "% of reassigned)"),
+          "N/A"),
+      `EA coverage` =
+        if (all(c("n_ea_covered", "n_total_eas") %in% names(transform_raw))) {
+          ifelse(!is.na(n_ea_covered) & !is.na(n_total_eas),
+            paste0(format(n_ea_covered, big.mark = ","), " / ", format(n_total_eas, big.mark = ","),
+                   " (", round(n_ea_covered / n_total_eas * 100, 1), "%)"),
+            "N/A")
+        } else {
+          rep("N/A", n())
+        }
+    ) %>%
+    select(Source, `No GPS`, `Inaccurate GPS (> threshold)`,
+           `Accurate GPS (<= threshold, reassigned)`, `EAs changed by reassignment`, `EA coverage`)
+  gps_tbl %>%
+    kable() %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
+}
+```
+
+#### MPHC census — GPS split (household level)
+
+```{r transform-mphc}
+if (!mphc_available) {
+  cat("_Data not available._")
+} else {
+  lon      <- mphc_hh[[mphc_cfg$longitude_col]]
+  lat      <- mphc_hh[[mphc_cfg$latitude_col]]
+  n_hh_total  <- nrow(mphc_hh)
+  n_hh_with_gps  <- sum(!is.na(lon) & !is.na(lat))
+  n_hh_without_gps <- n_hh_total - n_hh_with_gps
+  mphc_ea_cov <- length(unique(mphc_hh$EA_CODE))
+  tibble::tibble(
+    Metric = c("Total households",
+               "With GPS (spatially assigned via shapefile)",
+               "Without GPS (EA_CODE constructed from district + TA + EA)",
+               "EA coverage"),
+    Value  = c(
+      format(n_hh_total, big.mark = ","),
+      paste0(format(n_hh_with_gps, big.mark = ","),
+             " (", round(n_hh_with_gps / n_hh_total * 100, 1), "%)"),
+      paste0(format(n_hh_without_gps, big.mark = ","),
+             " (", round(n_hh_without_gps / n_hh_total * 100, 1), "%)"),
+      ifelse(!is.na(n_total_eas),
+        paste0(format(mphc_ea_cov, big.mark = ","), " / ", format(n_total_eas, big.mark = ","),
+               " (", round(mphc_ea_cov / n_total_eas * 100, 1), "%)"),
+        "N/A")
+    )
+  ) %>%
+    kable(col.names = NULL) %>%
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
+}
+```
+
+#### DHS listing — cluster filter stages
+
+```{r transform-dhs}
+if (!transform_stats_available) {
+  cat("_Not available._")
+} else {
+  row <- transform_raw %>% filter(source == "dhs_listing")
+  if (nrow(row) == 0) { cat("_DHS listing stats not found._") } else {
+    max_dist <- if (config_loaded) cfg$thresholds$dhs_max_distance_m else "?"
+    dhs_ea_cov <- if ("n_ea_covered" %in% names(row)) row$n_ea_covered else NA
+    has_ea_cols <- all(c("n_ea_covered", "n_total_eas") %in% names(row))
+    
+    filter_tbl <- tibble::tibble(
+      Stage = c(
+        "Total clusters in raw file",
+        "After segmentation filter",
+        paste0("After distance filter (> ", max_dist, "m excluded)"),
+        "Clusters used for EA assignment",
+        if (has_ea_cols) "EA coverage" else NULL
+      ),
+      Count    = c(
+        format(row$n_total_clusters, big.mark = ","),
+        format(row$n_nonseg_clusters, big.mark = ","),
+        format(row$n_within_dist, big.mark = ","),
+        format(row$n_within_dist, big.mark = ","),
+        if (has_ea_cols && !is.na(dhs_ea_cov) && !is.na(row$n_total_eas)) {
+          paste0(format(dhs_ea_cov, big.mark = ","), " / ", format(row$n_total_eas, big.mark = ","),
+                 " (", round(dhs_ea_cov / row$n_total_eas * 100, 1), "%)")
+        } else if (has_ea_cols) {
+          "N/A"
+        } else {
+          NULL
+        }
+      ),
+      Excluded = c(
+        "",
+        paste0(row$n_seg_excluded,  " excluded"),
+        paste0(row$n_dist_excluded, " excluded"),
+        "",
+        if (has_ea_cols) "" else NULL
+      )
+    )
+    filter_tbl %>%
+      kable() %>%
+      kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE) %>%
+      row_spec(2, background = "#fff3cd") %>%
+      row_spec(3, background = "#fff3cd") %>%
+      row_spec(4, background = "#eafaf1") %>%
+      {if (has_ea_cols) row_spec(., 5, background = "#e8f4f8") else .}
+  }
+}
+```
+
+#### Output EA coverage
+
+```{r transform-coverage}
+if (!output_coverage_available) {
+  cat("_Output CSV or EA shapefile not available._")
+} else {
+  n_ea_shp    <- n_distinct(ea_shp$EA_CODE)
+  n_ea_output <- n_distinct(output_csv$EA_CODE)
+  n_missing   <- n_ea_shp - n_ea_output
+  tibble::tibble(
+    Metric = c("Total EAs in shapefile", "EAs present in output",
+               "EA coverage", "EAs with no data"),
+    Value  = c(
+      format(n_ea_shp,    big.mark = ","),
+      format(n_ea_output, big.mark = ","),
+      paste0(round(n_ea_output / n_ea_shp * 100, 1), "%"),
+      format(n_missing,   big.mark = ",")
+    )
+  ) %>%
+    kable(col.names = NULL) %>%
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE) %>%
+    row_spec(4, background = if (n_missing > 0) "#fdedec" else "#eafaf1")
+}
+```
+
+---
+
+### Pipeline log
+
+```{r log-section, results='asis'}
+# Show WARN and ERROR prominently first
+flagged <- log_df[log_df$level %in% c("WARN", "ERROR"), ]
+
+if (nrow(flagged) > 0) {
+  cat("### ⚠ Warnings and errors\n\n")
+  cat('<div class="log-block">\n')
+  for (i in seq_len(nrow(flagged))) {
+    cls <- if (flagged$level[i] == "ERROR") "log-error" else "log-warn"
+    cat(sprintf('<div class="%s">%s</div>\n', cls, htmltools::htmlEscape(flagged$text[i])))
+  }
+  cat('</div>\n\n')
+} else {
+  cat("### ✓ No warnings or errors in log\n\n")
+}
+```
+
+<details>
+<summary>Show full log (`r nrow(log_df)` lines)</summary>
+```{r full-log, results='asis'}
+cat('<div class="log-block">\n')
+for (i in seq_len(nrow(log_df))) {
+  cls <- switch(log_df$level[i], ERROR = "log-error", WARN = "log-warn", "log-info")
+  cat(sprintf('<div class="%s">%s</div>\n', cls, htmltools::htmlEscape(log_df$text[i])))
+}
+cat('</div>\n')
+```
+</details>
+
+---
+
+### Quality Assurance results
+
+```{r qa-status-banner, results='asis'}
+cat(sprintf('<p style="font-size:1.2em">Pipeline Quality Assurance status: <span class="%s">%s</span></p>\n',
+  status_badge_class, overall_status))
+```
+
+```{r qa-summary-table}
+qa_summary_raw %>%
+  mutate(
+    `Columns compared`   = total_columns_compared,
+    `Value mismatches`   = total_mismatches,
+    `Duplicate keys (current)` = total_current_duplicate_keys,
+    `Duplicate keys (baseline)` = total_baseline_duplicate_keys,
+    `Key drift datasets` = datasets_with_duplicate_key_drift,
+    Status = status
+  ) %>%
+  select(Script = report_prefix, Status,
+         `Columns compared`, `Value mismatches`,
+         `Duplicate keys (current)`, `Duplicate keys (baseline)`,
+         `Key drift datasets`) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE) %>%
+  row_spec(which(qa_summary_raw$status == "PASS"), background = "#eafaf1") %>%
+  row_spec(which(qa_summary_raw$status == "FAIL"), background = "#fdedec")
+```
+
+#### Duplicate key detail
+
+```{r qa-dup-table}
+qa_dup_raw %>%
+  mutate(
+    `Key drift` = ifelse(duplicate_key_drift, "⚠ YES", "✓ No"),
+    `Current duplicates` = ifelse(current_duplicate_key_count == 0, "None",
+      paste0(current_duplicate_key_count, " (", current_duplicate_keys, ")")),
+    `Baseline duplicates` = ifelse(baseline_duplicate_key_count == 0, "None",
+      paste0(baseline_duplicate_key_count, " (see full report)"))
+  ) %>%
+  select(Dataset = dataset, `Key drift`, `Current duplicates`, `Baseline duplicates`) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE) %>%
+  row_spec(which(qa_dup_raw$duplicate_key_drift), background = "#fdedec")
+```
+
+#### Column mismatch detail
+
+```{r qa-col-table}
+if (nrow(qa_col_raw[qa_col_raw$mismatches > 0, ]) > 0) {
+  qa_col_raw[qa_col_raw$mismatches > 0, ] %>%
+    select(Dataset = dataset, Column = column,
+           `Total rows` = total_rows, Mismatches = mismatches,
+           `% mismatch` = pct_mismatch) %>%
+    kable() %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE) %>%
+    row_spec(seq_len(nrow(qa_col_raw[qa_col_raw$mismatches > 0, ])), background = "#fdedec")
+} else {
+  cat("✓ No column-level mismatches found across all compared datasets.")
+}
+```
+
+---
+
+## 5 — Rasterize
+
+> *Source data profile and QA for this script are not yet implemented.*
+
+---
+
+## 6 — Covariates_Extraction
+
+> *Source data profile and Quality Assurance for this script are not yet implemented.*
+
+---
+
+*Report generated by WorldPop Malawi pipeline — `r params$run_timestamp`*

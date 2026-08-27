@@ -18,9 +18,9 @@ options(scipen = 999) # turn off scientific notation for all variables
 #options(digits = 3)
 
 #Specify Drive Path
-drive_path <- "//Working/MALAWI/Ortis/"
+drive_path <- "./data/"
 input_path <- paste0(drive_path, "Output_Data/")
-shapefile_path <- paste0(drive_path, "Input_Data/Shapefiles/")
+shapefile_path <- paste0(drive_path, "Shapefiles/")
 output_path <- paste0(drive_path, "Output_Data/")
 output_path1 <- paste0(drive_path, "Output_Data/Pop_Rasters/")
 

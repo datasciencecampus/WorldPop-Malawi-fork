@@ -9,6 +9,7 @@ library(terra)
 library(kableExtra)
 library(inlabru)
 library(feather)
+library(glmnet)
 library(tidyverse)
 
 set.seed(1234) #set seed for reproducibility
@@ -17,7 +18,7 @@ options(scipen = 999) # turn off scientific notation for all variables
 #options(digits = 3)
 
 #Specify Drive Path
-drive_path <- "//Working/MALAWI/Ortis/"
+drive_path <- "./data/"
 input_path <- paste0(drive_path, "Output_Data/")
 shapefile_path <- paste0(drive_path, "Input_Data/Shapefiles/")
 output_path <- paste0(drive_path, "Output_Data/")
@@ -25,7 +26,7 @@ output_path1 <- paste0(drive_path, "Output_Data/Pop_Rasters/")
 
 #Load data
 pop_data <-  read.csv(paste0(input_path, "Malawi_2024_data.csv"))
-shapefile <- st_read(paste0(shapefile_path, "2018_MPHC_EAs_Final_for_Use_Corrected.shp"))
+shapefile <- st_read(paste0(shapefile_path, "2018_MPHC_EAs_Final_for_Use.shp"))
 
 #create unique id for each district
 pop_data <- pop_data %>% 
@@ -280,9 +281,9 @@ print(final_formula)
 
 #function to drop non-significant variables
 # Start with full model
-current_formula <- as.formula("hh_density ~  x13 + x32 + x36 + x38 + x39 + x40 + 
-    x41 + x44 + x45 + x47 + x49 + x51 + x55 + x56 + x61 + x63 + 
-    x64")
+current_formula <- as.formula("hh_density ~ x19 + x26 + x36 + x37 + x39 + x40 + 
+                                x43 + x46 + x48 + x50 + x52 + x54 + x55 + x56 + x57 + x60 + 
+                                x61 + x62")
 
 # Loop to drop non-significant variables
 repeat {
@@ -327,8 +328,8 @@ covs_selection1 <- covs_selection %>%
 
 #Lasso Regression
 fit1_lasso <- train(
-  hh_density ~ x13 + x32 + x36 + x38 + x39 + x41 + x44 + x45 + 
-    x47 + x49 + x55 + x56 + x61 + x63 + x64,
+  hh_density ~ x19 + x26 + x36 + x40 + x43 + x46 + x48 + x54 + 
+    x55 + x57 + x60 + x61 + x62,
   data = covs_selection1,
   method = "glmnet",
   metric = "RMSE",  # Choose from RMSE, RSquared, AIC, BIC, ...others?

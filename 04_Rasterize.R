@@ -8,15 +8,14 @@ library(raster)
 
 
 #Specify Drive Path
-drive_path <- "//Working/MALAWI/Ortis/"
+drive_path <- "./data/"
 output_path <- paste0(drive_path, "Output_Data/")
-shapefile_path <- paste0(drive_path, "Input_Data/Shapefiles/")
+shapefile_path <- paste0(drive_path, "Shapefiles/")
 bcount_path_2024 <- paste0(drive_path, "Input_Data/Mosaic_Buildings_2024/")
 
 #Load datasets
-ea <- st_read(file.path(shapefile_path, "EA_Shapefile.shp"))
+ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use.shp")) # replaces "EA_Shapefile.shp"
 bcount <- rast(file.path(bcount_path_2024, "MOS_MLW_buildings_count_2023_glv2_5_t0_5_C_100m_v1.tif"))
-country <- st_read(file.path(shapefile_path, "Country_Shapefile.shp"))
 hh_size <- read.csv(paste0(output_path, "summarized_survey_data.csv"))
 mphc_structures_2018 <- st_read(paste0(output_path, "mphc_structures_points.gpkg"))
 mphc_2018_sf <- st_read(paste0(output_path, "mphc_2018_sf_ea.gpkg"))
@@ -45,11 +44,36 @@ hh_size <- hh_size |>
 hh_ea <-full_join(ea, hh_size, by = "EA_CODE")
 
 # Rasterize Country ------------------------------------------------------
+country_data_filename <- "Country_Shapefile.shp"
+if(file.exists(file.path(shapefile_path, country_data_filename))) {
+  country <- st_read(file.path(shapefile_path, country_data_filename))
+} else {
+  country <- generate_buffered_country_boundary(shape_path = shapefile_path,
+                                                file_name = country_data_filename,
+                                                buffer = 0)
+}
 
-country <- st_transform(country, crs = st_crs(bcount))
+# Handle both outputs from generate_buffered_country_boundary(): sf or bare sfc geometry.
+country <- if (inherits(country, "sf")) {
+  country
+} else {
+  st_as_sf(country)
+}
 
-country_raster <- rasterize(country, bcount, field = "Country_ID")
-plot(country_raster)
+# If geometry came back without CRS, assume EA CRS because country was derived from EA union.
+if (is.na(st_crs(country))) {
+  country <- st_set_crs(country, st_crs(ea))
+}
+
+country <- country %>%
+  st_transform(crs = st_crs(bcount)) %>%
+  st_make_valid() %>%
+  mutate(Country_ID = 1L)
+
+# Rasterize from terra vector for consistent behavior.
+country_raster <- terra::rasterize(terra::vect(country), bcount, field = "Country_ID", touches = TRUE)
+plot(country_raster, col = "#e63946", plg = list(title = "country_id"))
+plot(terra::as.polygons(country_raster, dissolve = TRUE), add = TRUE, border = "black", lwd = 0.6)
 
 #stack rasters
 stack_raster <- c(bcount, country_raster)

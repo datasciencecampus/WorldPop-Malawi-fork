@@ -1,0 +1,101 @@
+# config for every setting within the pipeline
+run:
+  timepoint: 2024
+  rebuild_mphc_gpkg: false
+  run_qa: true
+
+thresholds:
+  gps_accuracy_threshold_m: 5
+  dhs_max_distance_m: 5000
+
+paths:
+  drive_path: ./data
+  mnso_data_dir: MNSO-Data
+  output_dir: Output_Data
+  shapefile_dir: Shapefiles
+  log_dir: ./logs
+
+profiles:
+  "2024":
+    shapefile_path: ./data/Shapefiles/2018_MPHC_EAs_Final_for_Use.shp
+  "2018":
+    shapefile_path: ./data/Shapefiles/2018_MPHC_EAs_Final_for_Use.shp
+
+sources:
+  mphc:
+    required: true
+    data_file: mphc2018Data_AllRegions.dta
+    gpkg_file: mphc_2018_sf_ea.gpkg
+    household_id_col: hhnumber
+    longitude_col: hh_longitude
+    latitude_col: hh_latitude
+    district_col: district
+    ta_col: ta
+    ea_col: ea
+    sex_col: p03
+    age_col: p05
+  ict:
+    required: true
+    data_file: ICT Listing WorldPop.dta
+    source_ea_col: EA_Number
+    accuracy_col: GPS__Accuracy
+    longitude_col: GPS__Longitude
+    latitude_col: GPS__Latitude
+  ihs6:
+    required: true
+    data_file: IHS6 Listing WorldPop.dta
+    source_ea_col: EA_CODE
+    accuracy_col: GPS__Accuracy
+    longitude_col: GPS__Longitude
+    latitude_col: GPS__Latitude
+  naca:
+    required: true
+    data_file: Naca Listing WorldPop.dta
+    source_ea_col: EA_Number
+    accuracy_col: accuracy
+    longitude_col: longitude
+    latitude_col: latitude
+  dhs_listing:
+    required: true
+    data_file: FINAL MDHS LISTING DATA_Annon.dta
+    segmented_csv: DHS_Segmented_File.csv
+    cluster_id_col: QHCLUST
+    longitude_col: llongitude
+    latitude_col: llatitude
+  dhs_survey:
+    required: true
+    data_file: MDHS_2024_NoDZLK_anonymized.dta
+    cluster_id_col: QHCLUST
+    longitude_col: GHLONGITUDE
+    latitude_col: GHLATITUDE
+    household_id_col: QHNUMBER
+  zomba:
+    required: true
+    csv_dir: zomba_csv
+    output_file: zomba_rbind_data.csv
+    longitude_col: gps_longitude
+    latitude_col: gps_latitude
+    household_size_col: household_size
+  malemia:
+    required: true
+    data_file: malemia_hh_without_IDs.csv
+    longitude_col: hh_longitude
+    latitude_col: hh_latitude
+
+outputs:
+  data_processing2_summarized_csv: ./data/Output_Data/summarized_survey_data.csv
+  data_processing2_hh_size_gpkg: ./data/Output_Data/hh_size_data.gpkg
+  data_processing2_zomba_rbind_csv: ./data/Output_Data/zomba_rbind_data.csv
+
+data_processing2_qa:
+  report_prefix: data_processing2
+  current_summarized_csv_output_key: data_processing2_summarized_csv
+  current_hh_size_gpkg_output_key: data_processing2_hh_size_gpkg
+  baseline_summarized_csv: ./data/baseline/summarized_survey_data.csv
+  baseline_hh_size_gpkg: ./data/baseline/hh_size_data.gpkg
+
+qa_results:
+  baseline_manifest: ./data/qa/baseline_manifest.md
+  baseline_summary_markdown: ./data/qa/baseline_metrics.md
+  baseline_missing_values_csv: ./data/qa/baseline_missing_values.csv
+  baseline_numeric_summaries_csv: ./data/qa/baseline_numeric_summaries.csv

@@ -6,10 +6,10 @@ library(feather)
 library(sf)
 
 #Specify Drive Path
-drive_path <- "//Working/MALAWI/Ortis/"
+drive_path <- "./data/"
 covs_path_2024 <- paste0(drive_path, "Input_Data/Mosaic_Covariates_2024/")
 output_path <- paste0(drive_path, "Output_Data/")
-shapefile_path <- paste0(drive_path, "Input_Data/Shapefiles/")
+shapefile_path <- paste0(drive_path, "Shapefiles/")
 bcount_path_2024 <- paste0(drive_path, "Input_Data/Mosaic_Buildings_2024/")
 
 
@@ -143,7 +143,7 @@ prediction_covs <- prediction_covs |>
 
 #Read EA shapefiles and join to data
 
-ea <- st_read(file.path(shapefile_path, "EA_Shapefile.shp"))
+ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use.shp")) # replaces "EA_Shapefile.shp"
   
 #create unique id for each district
 district <- ea |> 
