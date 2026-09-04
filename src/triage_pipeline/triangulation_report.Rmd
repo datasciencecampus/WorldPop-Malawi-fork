@@ -14,6 +14,8 @@ params:
   triangulation_summary_csv: NULL
   distribution_summary_csv: NULL
   score_summary_csv: NULL
+  flagged_for_review_csv: NULL
+  ready_for_processing_csv: NULL
   distribution_plot_file: NULL
   alignment_score_pct_weight: NULL
   alignment_score_ci_bonus: NULL
@@ -55,6 +57,16 @@ distribution_summary <- read.csv(
 
 score_summary <- read.csv(
   params$score_summary_csv,
+  stringsAsFactors = FALSE
+)
+
+flagged_for_review <- read.csv(
+  params$flagged_for_review_csv,
+  stringsAsFactors = FALSE
+)
+
+ready_for_processing <- read.csv(
+  params$ready_for_processing_csv,
   stringsAsFactors = FALSE
 )
 ```
@@ -142,6 +154,96 @@ knitr::kable(
   ) %>%
   kableExtra::column_spec(2, width = "12em") %>%
   kableExtra::column_spec(3, width = "12em")
+```
+
+# Triage Classification & Next Steps
+
+This section summarizes which EAs are ready for processing versus which require manual review, based on alignment score and operational size category.
+
+**Decision Logic:**
+- **Ready for Processing (score ≥80)**: EAs with high confidence in WorldPop estimates can proceed to automated split/merge in QGIS
+- **Flagged for Review (score <80)**: EAs with low or medium confidence require manual investigation and will not be processed automatically
+
+```{r triage-summary}
+# Create summary table of confidence × operational category
+total_flagged <- nrow(flagged_for_review)
+total_ready <- nrow(ready_for_processing)
+total_all <- total_flagged + total_ready
+
+triage_summary <- data.frame(
+  Category = c("Flagged for Review", "Ready for Processing", "TOTAL"),
+  Count = c(total_flagged, total_ready, total_all),
+  Percentage = c(
+    sprintf("%.2f%%", total_flagged / total_all * 100),
+    sprintf("%.2f%%", total_ready / total_all * 100),
+    "100.00%"
+  )
+)
+
+knitr::kable(
+  triage_summary,
+  col.names = c("Classification", "Number of EAs", "Percentage"),
+  row.names = FALSE,
+  format = "html",
+  align = c("l", "r", "r")
+) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width = FALSE
+  ) %>%
+  kableExtra::column_spec(2:3, width = "12em")
+```
+
+**Operational Category Breakdown (Ready for Processing):**
+
+```{r operational-ready}
+if (nrow(ready_for_processing) > 0) {
+  ready_ops <- ready_for_processing %>%
+    group_by(operational_category) %>%
+    summarise(count = n(), .groups = "drop") %>%
+    arrange(operational_category)
+  
+  knitr::kable(
+    ready_ops,
+    col.names = c("Size Category", "Count"),
+    row.names = FALSE,
+    format = "html",
+    align = c("l", "r")
+  ) %>%
+    kableExtra::kable_styling(
+      bootstrap_options = c("striped", "hover"),
+      full_width = FALSE
+    ) %>%
+    kableExtra::column_spec(2, width = "12em")
+} else {
+  cat("No EAs ready for processing.")
+}
+```
+
+**Operational Category Breakdown (Flagged for Review):**
+
+```{r operational-flagged}
+if (nrow(flagged_for_review) > 0) {
+  flagged_ops <- flagged_for_review %>%
+    group_by(operational_category) %>%
+    summarise(count = n(), mean_score = sprintf("%.1f", mean(score, na.rm = TRUE)), .groups = "drop") %>%
+    arrange(operational_category)
+  
+  knitr::kable(
+    flagged_ops,
+    col.names = c("Size Category", "Count", "Mean Score"),
+    row.names = FALSE,
+    format = "html",
+    align = c("l", "r", "r")
+  ) %>%
+    kableExtra::kable_styling(
+      bootstrap_options = c("striped", "hover"),
+      full_width = FALSE
+    ) %>%
+    kableExtra::column_spec(2:3, width = "12em")
+} else {
+  cat("No EAs flagged for review.")
+}
 ```
 
 # Directional Analysis
