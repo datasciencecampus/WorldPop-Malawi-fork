@@ -1,0 +1,119 @@
+---
+title: "WorldPop Malawi - Household Estimate Triangulation Report"
+date: "`r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+output:
+  html_document:
+    theme: flatly
+    highlight: tango
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    self_contained: true
+params:
+  triangulation_csv: NULL
+  triangulation_summary_csv: NULL
+  distribution_summary_csv: NULL
+  distribution_plot_file: NULL
+---
+
+```{css, echo=FALSE}
+h2 {
+  border-top: 3px solid #2980b9;
+  padding-top: 14px;
+  margin-top: 36px;
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+
+library(dplyr)
+library(knitr)
+
+triangulation <- read.csv(
+  params$triangulation_csv,
+  stringsAsFactors = FALSE
+)
+
+triangulation_summary <- read.csv(
+  params$triangulation_summary_csv,
+  stringsAsFactors = FALSE
+)
+
+distribution_summary <- read.csv(
+  params$distribution_summary_csv,
+  stringsAsFactors = FALSE
+)
+```
+
+# Overview
+
+This report compares household estimates from the ratio-change method with WorldPop growth-factor estimates for each Enumeration Area in Malawi.
+
+```{r overview-placeholder}
+summary_table <- data.frame(
+  Measure = c(
+    "Total number of EAs included",
+    "Percentage of ratio-change estimates within WorldPop confidence interval",
+    "Mean percentage difference",
+    "Median percentage difference"
+  ),
+  `Ratio-change` = c(
+    as.character(triangulation_summary$ratio_change_eas),
+    rep("", 3)
+  ),
+  WorldPop = c(
+    as.character(triangulation_summary$worldpop_eas),
+    rep("", 3)
+  ),
+  Value = c(
+    as.character(triangulation_summary$total_eas),
+    sprintf("%.2f%%", triangulation_summary$pct_within_ci),
+    sprintf("%.2f%%", triangulation_summary$mean_pct_diff),
+    sprintf("%.2f%%", triangulation_summary$median_pct_diff)
+  )
+)
+
+knitr::kable(summary_table, row.names = FALSE)
+```
+
+# Distribution of Differences
+
+```{r distribution-placeholder}
+knitr::kable(
+  distribution_summary,
+  col.names = c("Statistic", "Percentage difference"),
+  row.names = FALSE,
+  digits = 2
+)
+
+knitr::include_graphics(params$distribution_plot_file)
+```
+
+# Directional Analysis
+
+```{r direction-placeholder}
+# Placeholder for comparing the number of EAs where each method is higher.
+```
+
+# Geographic Breakdown
+
+```{r geography-placeholder}
+# Placeholder for region- and district-level comparisons.
+```
+
+# Triage Targets
+
+```{r triage-placeholder}
+# Placeholder for identifying EAs with the greatest disagreement.
+```
+
+# Data Notes
+
+```{r data-notes-placeholder}
+# Placeholder for missing values, duplicate checks, and other data-quality notes.
+```
