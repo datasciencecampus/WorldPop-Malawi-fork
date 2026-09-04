@@ -35,7 +35,7 @@ mosaic_raster <- function(
   output_path <- file.path(drive_path, output_folder, as.character(year))
   building_path <- file.path(drive_path, "Malawi_Covs", paste0(year, "_Buildings"))
 
-
+  log_info("Begining to process rasters...")
   # create list of folders where rasters are stored
   countries <- c("Malawi_Covs", "Mozambique_Covs", "Tanzania_Covs", "Zambia_Covs")
 
@@ -64,12 +64,12 @@ mosaic_raster <- function(
     boundary <- generate_buffered_country_boundary(shape_path = shp_path, file_name = boundary_data_filename, buffer = 10E3)
   }
 
+  tic()
   # Use first .tif in the Malawi buildings folder as CRS reference
   ref_tif <- list.files(building_path, pattern = "\\.tif$", full.names = TRUE)[1]
   r1 <- rast(ref_tif)
   boundary <- st_transform(boundary, crs = st_crs(r1))
 
-  tic()
   # Build folder paths for Malawi + neighbors
   raster_files <- list()
   # Loop through each folder and read all raster files  (.tif files)
@@ -91,6 +91,8 @@ mosaic_raster <- function(
       unique_raster_names <- setdiff(unique_raster_names, existing_names)
     }
   }
+
+  log_info(sprintf("Found %d rasters to process...", length(unique_raster_names)))
   # Loop through each unique raster name and process
   for (raster_name in unique_raster_names) {
     process_raster(
@@ -103,6 +105,7 @@ mosaic_raster <- function(
   }
 
   toc()
+  log_info("finsished processing rasters!")
 }
 
 
@@ -132,7 +135,10 @@ process_raster <- function(
   rasters <- list()
   # Collect rasters with same name from each folder
   for (folder in folder_list) {
-    matching_files <- raster_files[[folder]][sapply(basename(raster_files[[folder]]), function(x) substr(x, 4, nchar(x)) == raster_name)]
+    matching_files <- Filter(
+      function(f) substr(basename(f), 4, nchar(basename(f))) == raster_name,
+      raster_files[[folder]]
+    )
     rasters <- c(rasters, lapply(matching_files, rast))
   }
   # Get the CRS of the first raster (CMR)
