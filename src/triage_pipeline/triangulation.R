@@ -300,11 +300,11 @@ calculate_and_write_score_summary <- function(
 #'
 #' Assigns each EA to a category based on WorldPop household estimates using
 #' thresholds from config. Categories reflect operational needs for EA splitting:
-#' - Very_small: < threshold_very_small households (no action needed)
-#' - Normal: threshold_very_small to threshold_near_300_lower households
-#' - Near_300_threshold: threshold_near_300_lower to threshold_near_300_upper households
+#' - <50: < threshold_very_small households (no action needed)
+#' - 50-249: threshold_very_small to threshold_near_300_lower households
+#' - 250-350: threshold_near_300_lower to threshold_near_300_upper households
 #'   (target range for NSO; may need splitting if >upper bound)
-#' - Very_large: > threshold_near_300_upper households (will definitely need splitting)
+#' - >350: > threshold_near_300_upper households (will definitely need splitting)
 #'
 #' @param triangulation (data.frame) Triangulation results containing household counts.
 #' @param hh_col (character) Name of the column containing household counts.
@@ -331,14 +331,14 @@ classify_operational_category <- function(
   
   triangulation$operational_category <- ifelse(
     hh_count < threshold_very_small,
-    "Very_small",
+    "<50",
     ifelse(
       hh_count > threshold_near_300_upper,
-      "Very_large",
+      ">350",
       ifelse(
         hh_count >= threshold_near_300_lower & hh_count <= threshold_near_300_upper,
-        "Near_300_threshold",
-        "Normal"
+        "250-350",
+        "50-249"
       )
     )
   )
