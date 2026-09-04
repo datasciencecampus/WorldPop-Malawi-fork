@@ -14,8 +14,6 @@ source("utils.R")
 #'
 #' @param config (list) Pipeline config file.
 #' @param year (numeric) Data year, e.g. 2018 or 2024.
-#' @param folder_list (list) list containing characters of the folder names
-#'  containing the rasters
 #' @param output_folder (character) folder in which to store the outputs. The
 #'  year will be appended. e.g. "Mosaic_Buildings_" or "Mosaic_Covariates_".
 #' @param raster_type (character) type of raster being used in function, must
@@ -27,7 +25,6 @@ source("utils.R")
 mosaic_raster <- function(
   config,
   year,
-  folder_list,
   output_folder,
   raster_type,
   boundary_data_filename = "Country_Shapefile_Buffer_10km.shp",
