@@ -110,9 +110,14 @@ triage_pipeline:
   distribution_summary_file: ./data/triage_pipeline/distribution_summary.csv
   score_summary_file: ./data/triage_pipeline/score_summary.csv
   distribution_plot_file: ./data/triage_pipeline/distribution_pct_diff.png
+  flagged_for_review_file: ./data/triage_pipeline/flagged_for_review.csv
+  ready_for_processing_file: ./data/triage_pipeline/ready_for_processing.csv
   alignment_score_pct_weight: 2
   alignment_score_ci_bonus: 15
   urban_rural_col: "area_type"
+  operational_threshold_very_small: 50
+  operational_threshold_near_300_lower: 250
+  operational_threshold_near_300_upper: 350
   hh_estimate_csv: ./data/triage_pipeline/WP_Latent_Effect_Growth_Factor_Estimates.csv
   ratio_change_csv: ./data/triage_pipeline/ratio_change_data/Output_Data/combined_urban_rural_ratio_change.csv
   hh_estimate_clean_csv: ./data/triage_pipeline/WP_Latent_Effect_Growth_Factor_Estimates_clean.csv

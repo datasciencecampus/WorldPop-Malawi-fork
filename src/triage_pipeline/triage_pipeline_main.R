@@ -18,7 +18,10 @@ triangulation <- calculate_and_write_triangulation(
   triangulation_data,
   config$triage_pipeline$triangulation_file,
   config$triage_pipeline$alignment_score_pct_weight,
-  config$triage_pipeline$alignment_score_ci_bonus
+  config$triage_pipeline$alignment_score_ci_bonus,
+  config$triage_pipeline$operational_threshold_very_small,
+  config$triage_pipeline$operational_threshold_near_300_lower,
+  config$triage_pipeline$operational_threshold_near_300_upper
 )
 
 triangulation_summary <- triangulation |>
@@ -45,6 +48,12 @@ calculate_and_write_distribution_summary(
 calculate_and_write_score_summary(
   triangulation,
   config$triage_pipeline$score_summary_file
+)
+
+generate_flagged_ready_lists(
+  triangulation,
+  config$triage_pipeline$flagged_for_review_file,
+  config$triage_pipeline$ready_for_processing_file
 )
 
 write_distribution_plot(triangulation,
@@ -81,6 +90,8 @@ rmarkdown::render(
     triangulation_summary_csv = triangulation_summary_file,
     distribution_summary_csv = distribution_summary_file,
     score_summary_csv = resolve_config_path(config$triage_pipeline$score_summary_file, project_root),
+    flagged_for_review_csv = resolve_config_path(config$triage_pipeline$flagged_for_review_file, project_root),
+    ready_for_processing_csv = resolve_config_path(config$triage_pipeline$ready_for_processing_file, project_root),
     distribution_plot_file = basename(
       config$triage_pipeline$distribution_plot_file
     ),

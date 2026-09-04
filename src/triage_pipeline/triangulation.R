@@ -94,7 +94,10 @@ load_triangulation_data <- function(
 #'
 #' @param pct_weight (numeric) Points deducted per 1% difference (from config).
 #' @param ci_bonus (numeric) Bonus points if within confidence interval (from config).
-calculate_and_write_triangulation <- function(data, output_csv, pct_weight, ci_bonus) {
+#' @param threshold_very_small (numeric) Household threshold for very_small category (from config).
+#' @param threshold_near_300_lower (numeric) Lower household threshold for near_300_threshold (from config).
+#' @param threshold_near_300_upper (numeric) Upper household threshold for near_300_threshold (from config).
+calculate_and_write_triangulation <- function(data, output_csv, pct_weight, ci_bonus, threshold_very_small = 50, threshold_near_300_lower = 250, threshold_near_300_upper = 350) {
   triangulation <- dplyr::left_join(
     data$ratio_change_data,
     data$growth_factor_data,
@@ -120,6 +123,15 @@ calculate_and_write_triangulation <- function(data, output_csv, pct_weight, ci_b
     triangulation$within_ci,
     pct_weight,
     ci_bonus
+  )
+  
+  # Classify into operational categories
+  triangulation <- classify_operational_category(
+    triangulation,
+    hh_col = data$gf_cols[1],
+    threshold_very_small = threshold_very_small,
+    threshold_near_300_lower = threshold_near_300_lower,
+    threshold_near_300_upper = threshold_near_300_upper
   )
 
   write.csv(triangulation, output_csv, row.names = FALSE)
@@ -282,5 +294,115 @@ calculate_and_write_score_summary <- function(
   
   write.csv(score_summary, output_csv, row.names = FALSE)
   score_summary
+}
+
+#' Classify EAs into operational categories based on household count
+#'
+#' Assigns each EA to a category based on WorldPop household estimates using
+#' thresholds from config. Categories reflect operational needs for EA splitting:
+#' - Very_small: < threshold_very_small households (no action needed)
+#' - Normal: threshold_very_small to threshold_near_300_lower households
+#' - Near_300_threshold: threshold_near_300_lower to threshold_near_300_upper households
+#'   (target range for NSO; may need splitting if >upper bound)
+#' - Very_large: > threshold_near_300_upper households (will definitely need splitting)
+#'
+#' @param triangulation (data.frame) Triangulation results containing household counts.
+#' @param hh_col (character) Name of the column containing household counts.
+#'   Default: "predicted_hh_count_2024".
+#' @param threshold_very_small (numeric) Upper bound for very_small category (default 50).
+#' @param threshold_near_300_lower (numeric) Lower bound for near_300_threshold category (default 250).
+#' @param threshold_near_300_upper (numeric) Upper bound for near_300_threshold category (default 350).
+#'
+#' @return (data.frame) Input data frame with added column `operational_category`.
+#'
+#' @export
+classify_operational_category <- function(
+  triangulation,
+  hh_col = "predicted_hh_count_2024",
+  threshold_very_small = 50,
+  threshold_near_300_lower = 250,
+  threshold_near_300_upper = 350
+) {
+  if (!(hh_col %in% names(triangulation))) {
+    stop("Column '", hh_col, "' not found in triangulation data.")
+  }
+  
+  hh_count <- triangulation[[hh_col]]
+  
+  triangulation$operational_category <- ifelse(
+    hh_count < threshold_very_small,
+    "Very_small",
+    ifelse(
+      hh_count > threshold_near_300_upper,
+      "Very_large",
+      ifelse(
+        hh_count >= threshold_near_300_lower & hh_count <= threshold_near_300_upper,
+        "Near_300_threshold",
+        "Normal"
+      )
+    )
+  )
+  
+  triangulation
+}
+
+#' Generate flagged for review and ready for processing lists
+#'
+#' Splits triangulation results into two output files based on alignment score:
+#' - flagged_for_review: All EAs with score <80 (requires manual investigation)
+#' - ready_for_processing: High-confidence EAs with score >=80 (can proceed to QGIS)
+#'
+#' Includes only essential columns: EA_CODE, alignment score, operational category,
+#' household estimates from both methods, and agreement metrics.
+#'
+#' @param triangulation (data.frame) Triangulation results with score and operational_category columns.
+#' @param flagged_csv (character) Path to write flagged EAs (sorted by score, worst first).
+#' @param ready_csv (character) Path to write ready-for-processing EAs (sorted by operational category).
+#'
+#' @return (list) List with two data frames: `flagged` and `ready`.
+#'
+#' @export
+generate_flagged_ready_lists <- function(
+  triangulation,
+  flagged_csv,
+  ready_csv
+) {
+  # Ensure operational_category exists
+  if (!"operational_category" %in% names(triangulation)) {
+    stop("Column 'operational_category' not found. Run classify_operational_category() first.")
+  }
+  
+  # Define columns to keep - only essential ones for NSO review
+  cols_to_keep <- c(
+    "EA_CODE",
+    "census_ratio_tmpl",
+    "predicted_hh_count_2024",
+    "hh_lower_2024",
+    "hh_upper_2024",
+    "pct_diff",
+    "direction",
+    "within_ci",
+    "score",
+    "operational_category"
+  )
+  
+  # Filter to only columns that exist in the data
+  cols_to_keep <- cols_to_keep[cols_to_keep %in% names(triangulation)]
+  
+  # Split by score threshold
+  flagged <- triangulation[triangulation$score < 80, cols_to_keep]
+  ready <- triangulation[triangulation$score >= 80, cols_to_keep]
+  
+  # Sort flagged by score (worst first)
+  flagged <- flagged[order(flagged$score), ]
+  
+  # Sort ready by operational category
+  ready <- ready[order(ready$operational_category), ]
+  
+  # Write to CSV
+  write.csv(flagged, flagged_csv, row.names = FALSE)
+  write.csv(ready, ready_csv, row.names = FALSE)
+  
+  invisible(list(flagged = flagged, ready = ready))
 }
 
