@@ -32,7 +32,7 @@ mosaic_raster <- function(
 ) {
   drive_path <- config$paths$drive_path
   shp_path <- file.path(drive_path, config$paths$shapefile_dir)
-  output_path <- file.path(drive_path, output_folder, as.character(year))
+  output_path <- file.path(drive_path, paste0(output_folder, year))
   building_path <- file.path(drive_path, "Malawi_Covs", paste0(year, "_Buildings"))
 
   log_info("Begining to process rasters...")
