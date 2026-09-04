@@ -1,0 +1,4 @@
+data/*
+
+# temporary, github actions may be useful in the future
+.github/*
