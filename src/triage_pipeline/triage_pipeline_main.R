@@ -10,12 +10,15 @@ config <- load_config()
 # Triangulation
 triangulation_data <- load_triangulation_data(
   config$triage_pipeline$ratio_change_clean_csv,
-  config$triage_pipeline$hh_estimate_clean_csv
+  config$triage_pipeline$hh_estimate_clean_csv,
+  urban_rural_col = config$triage_pipeline$urban_rural_col
 )
 
 triangulation <- calculate_and_write_triangulation(
   triangulation_data,
-  config$triage_pipeline$triangulation_file
+  config$triage_pipeline$triangulation_file,
+  config$triage_pipeline$alignment_score_pct_weight,
+  config$triage_pipeline$alignment_score_ci_bonus
 )
 
 triangulation_summary <- triangulation |>
@@ -37,6 +40,11 @@ write.csv(
 calculate_and_write_distribution_summary(
   triangulation,
   config$triage_pipeline$distribution_summary_file
+)
+
+calculate_and_write_score_summary(
+  triangulation,
+  config$triage_pipeline$score_summary_file
 )
 
 write_distribution_plot(triangulation,
@@ -72,9 +80,12 @@ rmarkdown::render(
     triangulation_csv = triangulation_file,
     triangulation_summary_csv = triangulation_summary_file,
     distribution_summary_csv = distribution_summary_file,
+    score_summary_csv = resolve_config_path(config$triage_pipeline$score_summary_file, project_root),
     distribution_plot_file = basename(
       config$triage_pipeline$distribution_plot_file
-    )
+    ),
+    alignment_score_pct_weight = config$triage_pipeline$alignment_score_pct_weight,
+    alignment_score_ci_bonus = config$triage_pipeline$alignment_score_ci_bonus
   ),
   knit_root_dir = triage_output_dir
 )

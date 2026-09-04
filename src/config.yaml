@@ -108,7 +108,11 @@ triage_pipeline:
   triangulation_file: ./data/triage_pipeline/triangulation.csv
   triangulation_summary_file: ./data/triage_pipeline/triangulation_summary.csv
   distribution_summary_file: ./data/triage_pipeline/distribution_summary.csv
+  score_summary_file: ./data/triage_pipeline/score_summary.csv
   distribution_plot_file: ./data/triage_pipeline/distribution_pct_diff.png
+  alignment_score_pct_weight: 2
+  alignment_score_ci_bonus: 15
+  urban_rural_col: "area_type"
   hh_estimate_csv: ./data/triage_pipeline/WP_Latent_Effect_Growth_Factor_Estimates.csv
   ratio_change_csv: ./data/triage_pipeline/ratio_change_data/Output_Data/combined_urban_rural_ratio_change.csv
   hh_estimate_clean_csv: ./data/triage_pipeline/WP_Latent_Effect_Growth_Factor_Estimates_clean.csv

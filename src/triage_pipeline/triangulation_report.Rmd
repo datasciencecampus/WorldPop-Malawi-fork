@@ -94,6 +94,36 @@ knitr::kable(
 knitr::include_graphics(params$distribution_plot_file)
 ```
 
+# Alignment Score Distribution
+
+This section shows the distribution of EA alignment scores, which measure how well the ratio-change and WorldPop growth-factor estimates agree.
+
+**Scoring Methodology:**
+The alignment score ranges from 0 to 100 based on:
+- **Percentage difference penalty**: `r params$alignment_score_pct_weight` points deducted per 1% difference
+- **Confidence interval bonus**: `r params$alignment_score_ci_bonus` points added if ratio-change falls within WorldPop's confidence interval
+
+Formula: `Score = min(100, max(0, 100 - (|pct_diff| * weight) + (within_ci ? bonus : 0)))`
+
+```{r score-distribution}
+score_table <- score_summary
+score_table$percentage <- sprintf("%.2f%%", score_table$percentage)
+
+knitr::kable(
+  score_table,
+  col.names = c("Confidence Level", "Number of EAs", "Percentage"),
+  row.names = FALSE,
+  format = "html",
+  align = c("l", "r", "r")
+) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width = FALSE
+  ) %>%
+  kableExtra::column_spec(2, width = "12em") %>%
+  kableExtra::column_spec(3, width = "12em")
+```
+
 # Directional Analysis
 
 ```{r direction-placeholder}

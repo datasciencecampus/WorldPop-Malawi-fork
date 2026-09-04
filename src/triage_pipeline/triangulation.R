@@ -34,7 +34,8 @@ load_triangulation_data <- function(
     "predicted_hh_count_2024",
     "hh_lower_2024",
     "hh_upper_2024"
-  )
+  ),
+  urban_rural_col = "urban_rural"
 ) {
   ratio_change_data <- read.csv(ratio_change_csv, stringsAsFactors = FALSE)
   growth_factor_data <- read.csv(growth_factor_csv, stringsAsFactors = FALSE)
@@ -42,6 +43,14 @@ load_triangulation_data <- function(
   stopifnot(join_key %in% names(ratio_change_data))
   stopifnot(rc_col %in% names(ratio_change_data))
   stopifnot(all(c(join_key, gf_cols) %in% names(growth_factor_data)))
+
+  # Check if urban_rural column exists in ratio_change_data
+  if (!is.null(urban_rural_col) && !(urban_rural_col %in% names(ratio_change_data))) {
+    warning(
+      "Column '", urban_rural_col, "' not found in ratio_change_data. ",
+      "Urban/rural breakdown will not be available."
+    )
+  }
 
   rc_dups <- duplicated(ratio_change_data[[join_key]])
   gf_dups <- duplicated(growth_factor_data[[join_key]])
@@ -81,7 +90,11 @@ load_triangulation_data <- function(
 #'   - pct_diff: percentage difference
 #'   - direction: whether ratio_change is higher, gf is higher, or they agree
 #'   - within_ci: logical indicating if ratio change falls within confidence interval
-calculate_and_write_triangulation <- function(data, output_csv) {
+#'   - score: alignment score from 0-100 based on pct_diff and within_ci
+#'
+#' @param pct_weight (numeric) Points deducted per 1% difference (from config).
+#' @param ci_bonus (numeric) Bonus points if within confidence interval (from config).
+calculate_and_write_triangulation <- function(data, output_csv, pct_weight, ci_bonus) {
   triangulation <- dplyr::left_join(
     data$ratio_change_data,
     data$growth_factor_data,
@@ -100,6 +113,14 @@ calculate_and_write_triangulation <- function(data, output_csv) {
   triangulation$within_ci <- triangulation[[data$rc_col]] >=
     triangulation[[data$gf_cols[2]]] &
     triangulation[[data$rc_col]] <= triangulation[[data$gf_cols[3]]]
+
+  # Calculate alignment score
+  triangulation$score <- calculate_alignment_score(
+    triangulation$pct_diff,
+    triangulation$within_ci,
+    pct_weight,
+    ci_bonus
+  )
 
   write.csv(triangulation, output_csv, row.names = FALSE)
   triangulation
@@ -189,3 +210,77 @@ write_distribution_plot <- function(triangulation, output_file) {
     units = "in"
   )
 }
+
+#' Calculate EA alignment score based on triangulation agreement
+#'
+#' Scores each EA from 0-100 based on how well ratio_change and growth factor
+#' estimates agree. Higher scores indicate better agreement.
+#'
+#' @param pct_diff (numeric vector) Percentage differences from triangulation.
+#' @param within_ci (logical vector) Whether ratio_change is within growth factor's CI.
+#' @param pct_weight (numeric) Points deducted per 1% difference. Default 2.
+#' @param ci_bonus (numeric) Bonus points if within_ci. Default 15.
+#'
+#' @return (numeric vector) Alignment scores clamped to 0-100.
+#'
+#' @details
+#' Formula: (100 - (abs(pct_diff) * pct_weight)) + (within_ci ? ci_bonus : 0)
+#' Clamped to [0, 100].
+#'
+#' @examples
+#' calculate_alignment_score(c(2.5, -15.0, 0.5), c(TRUE, FALSE, TRUE), 2, 15)
+#'
+#' @export
+calculate_alignment_score <- function(
+  pct_diff,
+  within_ci,
+  pct_weight,
+  ci_bonus
+) {
+  score <- (100 - (abs(pct_diff) * pct_weight)) + (within_ci * ci_bonus)
+  pmin(100, pmax(0, score))  # Clamp to [0, 100]
+}
+
+#' Calculate summary statistics for alignment scores
+#'
+#' Counts EAs in each confidence band (High ≥80, Medium 50-79, Low <50)
+#' and writes summary to CSV.
+#'
+#' @param triangulation (data.frame) Triangulation results from calculate_and_write_triangulation()
+#'   containing score column.
+#' @param output_csv (character) Path where score summary should be written.
+#'
+#' @return (data.frame) Summary table with columns:
+#'   - confidence_level: "High confidence", "Medium confidence", or "Low confidence"
+#'   - count: Number of EAs in that band
+#'   - percentage: Percentage of total EAs
+#'
+#' @export
+calculate_and_write_score_summary <- function(
+  triangulation,
+  output_csv
+) {
+  total_eas <- nrow(triangulation)
+  
+  high_conf <- sum(triangulation$score >= 80, na.rm = TRUE)
+  med_conf <- sum(triangulation$score >= 50 & triangulation$score < 80, na.rm = TRUE)
+  low_conf <- sum(triangulation$score < 50, na.rm = TRUE)
+  
+  score_summary <- data.frame(
+    confidence_level = c(
+      "High confidence (score ≥80)",
+      "Medium confidence (score 50-79)",
+      "Low confidence (score <50)"
+    ),
+    count = c(high_conf, med_conf, low_conf),
+    percentage = c(
+      high_conf / total_eas * 100,
+      med_conf / total_eas * 100,
+      low_conf / total_eas * 100
+    )
+  )
+  
+  write.csv(score_summary, output_csv, row.names = FALSE)
+  score_summary
+}
+
