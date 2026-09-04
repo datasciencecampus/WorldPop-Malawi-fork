@@ -1,4 +1,4 @@
-# Mosaic building rasters from Malawi + neighboring countries for a given year
+# Mosaic rasters from Malawi + neighboring countries for a given year
 
 library(terra)
 library(sf)
@@ -7,25 +7,30 @@ library(tictoc)
 source("utils.R")
 
 
-#' Mosaic building rasters from Malawi and neighboring countries (Tanzania,
+#' Mosaic rasters from Malawi and neighbouring countries (Tanzania,
 #' Mozambique, Zambia), crop and mask to a buffered Malawi boundary, and write
 #' the results to data/Mosaic_Buildings_{year}/.
 #'
 #' @param config (list) Pipeline config file.
 #' @param year (numeric) Data year, e.g. 2018 or 2024.
+#' @param folders_list (list) list containing characters of the folder names
+#'  containing the rasters
 #' @param boundary_data_filename (character) filename for boundary buffer file.
-mosaic_buildings <- function(
+#' @param unique_file_name (boolean) whether to process only unique raster
+#'  files. Defaults to FALSE.
+mosaic_raster <- function(
   config,
   year,
-  boundary_data_filename = "Country_Shapefile_Buffer_10km.shp"
+  folders_list,
+  boundary_data_filename = "Country_Shapefile_Buffer_10km.shp",
+  unique_file_names = FALSE
 ) {
   drive_path <- config$paths$drive_path
   shp_path <- file.path(drive_path, config$paths$shapefile_dir)
-  result_path <- file.path(drive_path, paste0("Mosaic_Buildings_", year))
+  output_path <- file.path(drive_path, paste0("Mosaic_Buildings_", year))
   building_path <- file.path(drive_path, "Malawi_Covs", paste0(year, "_Buildings"))
 
-  # Load boundary
-  boundary_data_filename <- "Country_Shapefile_Buffer_10km.shp"
+  # Load country boundary
   if (file.exists(file.path(shp_path, boundary_data_filename))) {
     boundary <- st_read(file.path(shp_path, boundary_data_filename))
   } else {
@@ -38,14 +43,13 @@ mosaic_buildings <- function(
   boundary <- st_transform(boundary, crs = st_crs(r1))
 
   # Build folder paths for Malawi + neighbors
-  countries <- c("Malawi_Covs", "Tanzania_Covs", "Mozambique_Covs", "Zambia_Covs")
-  folders <- file.path(countries, paste0(year, "_Buildings"))
+  folder_list <- file.path(folders_list)
 
   raster_files <- list()
 
   tic()
   # Loop through each folder and read all raster files  (.tif files)
-  for (folder in folders) {
+  for (folder in folder_list) {
     folder_path <- file.path(drive_path, folder)
     files <- list.files(folder_path, pattern = "\\.tif$", full.names = TRUE)
     raster_files[[folder]] <- files
@@ -54,9 +58,18 @@ mosaic_buildings <- function(
   # Extract unique raster names (strip 3-letter country prefix)
   unique_raster_names <- unique(sapply(basename(unlist(raster_files)), function(x) substr(x, 4, nchar(x))))
 
+  # ---- Exclude raster names already in files_trim ----
+  unique_raster_names <- setdiff(unique_raster_names, files_trim)
+
   # Loop through each unique raster name and process
   for (raster_name in unique_raster_names) {
-    process_raster(raster_name)
+    process_raster(
+      raster_name = raster_name,
+      folder_list = folder_list,
+      raster_files = raster_files,
+      boundary = boundary,
+      output_path = output_path
+    )
   }
 
   toc()
@@ -73,13 +86,22 @@ mosaic_buildings <- function(
 #' @param raster_name (character) Raster filename without the 3-letter country
 #'   prefix, e.g. "_buildings_count_2018_glv2_5_t0_5_C_100m_v1.tif".
 #'   Must match files present in `raster_files`.
+#' @param folder_list (list) Ordered input-folder names used to determine
+#'   raster precedence in overlapping areas.
+#' @param raster_files (list) TIFF file paths indexed by `folders`.
+#' @param boundary (sf) Buffered boundary used to crop and mask the mosaic.
+#' @param output_path (character) Folder where the output raster is written.
 #'
-#' @note Relies on `folders`, `raster_files`, `boundary`, and `result_path`
-#'   from the calling scope (`mosaic_buildings`).
-process_raster <- function(raster_name) {
+process_raster <- function(
+  raster_name,
+  older_list,
+  raster_files,
+  boundary,
+  output_path
+) {
   rasters <- list()
   # Collect rasters with same name from each folder
-  for (folder in folders) {
+  for (folder in folder_list) {
     matching_files <- raster_files[[folder]][sapply(basename(raster_files[[folder]]), function(x) substr(x, 4, nchar(x)) == raster_name)]
     rasters <- c(rasters, lapply(matching_files, rast))
   }
@@ -97,11 +119,11 @@ process_raster <- function(raster_name) {
   # Save the masked raster to a file with a name based on the original raster file name
   output_name <- paste0("MOS_MLW", raster_name)
 
-  if (!file.exists(result_path)) {
-    dir.create(result_path, recursive = TRUE)
+  if (!file.exists(output_path)) {
+    dir.create(output_path, recursive = TRUE)
   }
 
-  writeRaster(masked_raster, file.path(result_path, output_name), overwrite = TRUE)
+  writeRaster(masked_raster, file.path(output_path, output_name), overwrite = TRUE)
   message("Saved ", output_name)
   # Remove the rasters from memory
   rm(list = ls(pattern = "raster"))
