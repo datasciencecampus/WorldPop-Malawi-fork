@@ -15,19 +15,23 @@ source("utils.R")
 #' @param year (numeric) Data year, e.g. 2018 or 2024.
 #' @param folders_list (list) list containing characters of the folder names
 #'  containing the rasters
-#' @param boundary_data_filename (character) filename for boundary buffer file.
-#' @param unique_file_name (boolean) whether to process only unique raster
-#'  files. Defaults to FALSE.
+#' @param output_folder (character) folder in which to store the outputs. The
+#'  year will be appended. e.g. "Mosaic_Buildings_" or "Mosaic_Covariates_".
+#' @param boundary_data_filename (character, optional) filename for boundary
+#'   buffer file. Defaults to "Country_Shapefile_Buffer_10km.shp".
+#' @param skip_existing_files (boolean) whether to process only new raster
+#'   files. Defaults to FALSE.
 mosaic_raster <- function(
   config,
   year,
   folders_list,
+  output_folder,
   boundary_data_filename = "Country_Shapefile_Buffer_10km.shp",
-  unique_file_names = FALSE
+  skip_existing_files = FALSE
 ) {
   drive_path <- config$paths$drive_path
   shp_path <- file.path(drive_path, config$paths$shapefile_dir)
-  output_path <- file.path(drive_path, paste0("Mosaic_Buildings_", year))
+  output_path <- file.path(drive_path, paste0(output_folder, year))
   building_path <- file.path(drive_path, "Malawi_Covs", paste0(year, "_Buildings"))
 
   # Load country boundary
@@ -58,9 +62,14 @@ mosaic_raster <- function(
   # Extract unique raster names (strip 3-letter country prefix)
   unique_raster_names <- unique(sapply(basename(unlist(raster_files)), function(x) substr(x, 4, nchar(x))))
 
-  # ---- Exclude raster names already in files_trim ----
-  unique_raster_names <- setdiff(unique_raster_names, files_trim)
-
+  if (skip_existing_files) {
+    # Exclude raster names already written to output_path
+    if (dir.exists(output_path)) {
+      existing_files <- list.files(output_path, pattern = "\\.tif$", full.names = FALSE)
+      existing_names <- substr(existing_files, 8, nchar(existing_files)) # Remove "MOS_MLW" prefix (7 chars)
+      unique_raster_names <- setdiff(unique_raster_names, existing_names)
+    }
+  }
   # Loop through each unique raster name and process
   for (raster_name in unique_raster_names) {
     process_raster(
@@ -88,13 +97,13 @@ mosaic_raster <- function(
 #'   Must match files present in `raster_files`.
 #' @param folder_list (list) Ordered input-folder names used to determine
 #'   raster precedence in overlapping areas.
-#' @param raster_files (list) TIFF file paths indexed by `folders`.
+#' @param raster_files (list) TIFF file paths indexed by `folder_list`.
 #' @param boundary (sf) Buffered boundary used to crop and mask the mosaic.
 #' @param output_path (character) Folder where the output raster is written.
 #'
 process_raster <- function(
   raster_name,
-  older_list,
+  folder_list,
   raster_files,
   boundary,
   output_path
