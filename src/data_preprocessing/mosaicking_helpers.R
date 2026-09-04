@@ -13,7 +13,7 @@ source("utils.R")
 #'
 #' @param config (list) Pipeline config file.
 #' @param year (numeric) Data year, e.g. 2018 or 2024.
-#' @param folders_list (list) list containing characters of the folder names
+#' @param folder_list (list) list containing characters of the folder names
 #'  containing the rasters
 #' @param output_folder (character) folder in which to store the outputs. The
 #'  year will be appended. e.g. "Mosaic_Buildings_" or "Mosaic_Covariates_".
@@ -24,14 +24,14 @@ source("utils.R")
 mosaic_raster <- function(
   config,
   year,
-  folders_list,
+  folder_list,
   output_folder,
   boundary_data_filename = "Country_Shapefile_Buffer_10km.shp",
   skip_existing_files = FALSE
 ) {
   drive_path <- config$paths$drive_path
   shp_path <- file.path(drive_path, config$paths$shapefile_dir)
-  output_path <- file.path(drive_path, paste0(output_folder, year))
+  output_path <- file.path(drive_path, output_folder, as.character(year))
   building_path <- file.path(drive_path, "Malawi_Covs", paste0(year, "_Buildings"))
 
   # Load country boundary
@@ -46,12 +46,9 @@ mosaic_raster <- function(
   r1 <- rast(ref_tif)
   boundary <- st_transform(boundary, crs = st_crs(r1))
 
-  # Build folder paths for Malawi + neighbors
-  folder_list <- file.path(folders_list)
-
-  raster_files <- list()
-
   tic()
+  # Build folder paths for Malawi + neighbors
+  raster_files <- list()
   # Loop through each folder and read all raster files  (.tif files)
   for (folder in folder_list) {
     folder_path <- file.path(drive_path, folder)
@@ -66,7 +63,8 @@ mosaic_raster <- function(
     # Exclude raster names already written to output_path
     if (dir.exists(output_path)) {
       existing_files <- list.files(output_path, pattern = "\\.tif$", full.names = FALSE)
-      existing_names <- substr(existing_files, 8, nchar(existing_files)) # Remove "MOS_MLW" prefix (7 chars)
+      # Remove "MOS_MLW" prefix (7 chars)
+      existing_names <- substr(existing_files, 8, nchar(existing_files))
       unique_raster_names <- setdiff(unique_raster_names, existing_names)
     }
   }
