@@ -3,6 +3,7 @@
 library(terra)
 library(sf)
 library(tictoc)
+library(logger)
 
 source("utils.R")
 
@@ -17,6 +18,8 @@ source("utils.R")
 #'  containing the rasters
 #' @param output_folder (character) folder in which to store the outputs. The
 #'  year will be appended. e.g. "Mosaic_Buildings_" or "Mosaic_Covariates_".
+#' @param raster_type (character) type of raster being used in function, must
+#'   be either "Buildings" or "Covariates"
 #' @param boundary_data_filename (character, optional) filename for boundary
 #'   buffer file. Defaults to "Country_Shapefile_Buffer_10km.shp".
 #' @param skip_existing_files (boolean) whether to process only new raster
@@ -26,6 +29,7 @@ mosaic_raster <- function(
   year,
   folder_list,
   output_folder,
+  raster_type,
   boundary_data_filename = "Country_Shapefile_Buffer_10km.shp",
   skip_existing_files = FALSE
 ) {
@@ -33,6 +37,28 @@ mosaic_raster <- function(
   shp_path <- file.path(drive_path, config$paths$shapefile_dir)
   output_path <- file.path(drive_path, output_folder, as.character(year))
   building_path <- file.path(drive_path, "Malawi_Covs", paste0(year, "_Buildings"))
+
+
+  # create list of folders where rasters are stored
+  countries <- c("Malawi_Covs", "Mozambique_Covs", "Tanzania_Covs", "Zambia_Covs")
+
+  # Handle naming inconsistency: Zambia uses "Covs" not "Covariates"
+  # TODO: Can we just have a consistent name for all the folders? This would
+  #    This would save these 11 lines...
+  if (raster_type == "Covariates") {
+    suffixes <- c("Covariates", "Covariates", "Covariates", "Covs")
+  } else if (raster_type == "Buildings") {
+    # repeat suffix four times
+    suffixes <- rep(raster_type, length(countries))
+  } else {
+    log_warn(paste0(
+      "raster type given is: ",
+      raster_type,
+      " must be either 'Covariates' or 'Buildings'"
+    ))
+  }
+
+  folder_list <- paste0(countries, "/", year, "_", suffixes)
 
   # Load country boundary
   if (file.exists(file.path(shp_path, boundary_data_filename))) {
