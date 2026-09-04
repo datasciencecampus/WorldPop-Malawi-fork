@@ -275,3 +275,21 @@ setup_pandoc <- function() {
     )
     invisible(NULL)
 }
+
+#' Resolve a config path relative to the project root
+#'
+#' Strips leading "./" from relative config paths and combines them with the
+#' project root directory to produce an absolute path.
+#'
+#' @param config_path (character) A path from config.yaml (e.g., "./data/output.csv").
+#' @param project_root (character) The absolute path to the project root.
+#'
+#' @return An absolute path.
+#' @examples
+#' resolve_config_path("./data/triage_pipeline/output.csv", "/path/to/project")
+#' # Returns "/path/to/project/data/triage_pipeline/output.csv"
+#'
+#' @export
+resolve_config_path <- function(config_path, project_root) {
+  file.path(project_root, sub("^\\./", "", config_path))
+}
