@@ -88,7 +88,9 @@ mosaic_raster <- function(
       existing_files <- list.files(output_path, pattern = "\\.tif$", full.names = FALSE)
       # Remove "MOS_MLW" prefix (7 chars)
       existing_names <- substr(existing_files, 8, nchar(existing_files))
+      unique_raster_names_len <- length(unique_raster_names)
       unique_raster_names <- setdiff(unique_raster_names, existing_names)
+      log_info(sprintf("%d out of %d were alread existing in %s, these will not be processed.", length(existing_names), unique_raster_names_len, output_path))
     }
   }
 
@@ -141,17 +143,31 @@ process_raster <- function(
     )
     rasters <- c(rasters, lapply(matching_files, rast))
   }
-  # Get the CRS of the first raster (CMR)
-  ref_crs <- crs(rasters[[1]])
-  # Reproject all rasters to the CRS of the first raster
-  rasters_reprojected <- lapply(rasters, function(r) project(r, ref_crs))
-  # Mosaic the rasters together, prioritizing the first raster in case of overlap
-  mosaic_raster <- do.call(mosaic, c(rasters_reprojected, fun = "first"))
 
-  # Crop the mosaicked raster using the shapefile boundary
-  cropped_raster <- crop(mosaic_raster, boundary)
-  # Mask the cropped raster to the boundary
-  masked_raster <- mask(cropped_raster, boundary)
+  # If there are less than one rasters, then we can't mosaic
+  if (length(rasters) == 0) {
+    log_warn(paste("No rasters found for:", raster_name))
+    return(invisible(NULL))
+  }
+
+  if (length(rasters) == 1) {
+    # Single raster, no mosaicking needed
+    log_info("Only 1 raster found, continuing without mosaicking...")
+    masked_raster <- mask(crop(rasters[[1]], boundary), boundary)
+  } else {
+    # Get the CRS of the first raster (CMR)
+    ref_crs <- crs(rasters[[1]])
+    # Reproject all rasters to the CRS of the first raster
+    rasters_reprojected <- lapply(rasters, function(r) project(r, ref_crs))
+    # Mosaic the rasters together, prioritizing the first raster in case of overlap
+    mosaic_raster <- do.call(mosaic, c(rasters_reprojected, list(fun = "first")))
+
+    # Crop the mosaicked raster using the shapefile boundary
+    cropped_raster <- crop(mosaic_raster, boundary)
+    # Mask the cropped raster to the boundary
+    masked_raster <- mask(cropped_raster, boundary)
+  }
+
   # Save the masked raster to a file with a name based on the original raster file name
   output_name <- paste0("MOS_MLW", raster_name)
 
