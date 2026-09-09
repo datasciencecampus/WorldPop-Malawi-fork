@@ -162,7 +162,7 @@ log_info("Begining data Processing,")
       row.names = FALSE)
 
   log_info("dp7 - processing DHS survey data")
-  dhs_hh_size <- process_dhs_survey_dataon(
+  dhs_hh_size <- process_dhs_survey_data(
     dhs_survey_data = dhs_data,
     ea_shapefile = ea,
     source_config = data_sources$dhs_survey,
