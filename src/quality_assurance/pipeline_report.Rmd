@@ -191,16 +191,16 @@ if (!config_loaded) {
       "Malemia"
     ),
     `File / Folder` = c(
-      "2018_MPHC_EAs_Final_for_Use.shp",
-      basename(cfg$sources$mphc$data_file),
-      basename(cfg$sources$ict$data_file),
-      basename(cfg$sources$ihs6$data_file),
-      basename(cfg$sources$naca$data_file),
-      basename(cfg$sources$dhs_listing$data_file),
-      basename(cfg$sources$dhs_listing$segmented_csv),
-      basename(cfg$sources$dhs_survey$data_file),
-      cfg$sources$zomba$csv_dir,
-      basename(cfg$sources$malemia$data_file)
+      cfg$profiles[[as.character(cfg$run$timepoint)]]$shapefile_path,
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$mphc$data_file),
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$ict$data_file),
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$ihs6$data_file),
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$naca$data_file),
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$dhs_listing$data_file),
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$dhs_listing$segmented_csv),
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$dhs_survey$data_file),
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$zomba$csv_dir),
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$malemia$data_file)
     )
   ) %>%
     kable() %>%
