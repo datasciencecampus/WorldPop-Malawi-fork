@@ -18,6 +18,7 @@ params:
   qa_duplicate_csv: NULL
   config_path:              NULL
   transformation_stats_csv: NULL
+  sys_info:        NULL
 ---
 
 ```{css, echo=FALSE}
@@ -904,6 +905,17 @@ if (nrow(qa_col_raw[qa_col_raw$mismatches > 0, ]) > 0) {
 ## 6 — Covariates_Extraction
 
 > *Source data profile and Quality Assurance for this script are not yet implemented.*
+
+---
+
+## System and Environment Information
+
+```{r system-info, results='asis'}
+# Use sys_info passed as parameter from main.R
+params$sys_info %>%
+  kable(col.names = c("Component", "Version/Info")) %>%
+  kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
+```
 
 ---
 
