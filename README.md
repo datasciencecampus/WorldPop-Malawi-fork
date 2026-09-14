@@ -10,11 +10,15 @@ This is the `ons-compatability-updates` branch, which includes updates for compa
 
 ## Dependencies
 
-To install all required packages, run this in your R console:
+To install all required packages as a one-off setup, run this in your R console:
 
 ``` r
-install.packages(c("tidyverse", "sf", "tictoc", "terra", "exactextractr", "haven", "nngeo", "INLA", "gstat", "spdep", "car", "caret", "kableExtra", "inlabru", "feather", "raster", "glmnet", "yaml", "modelsummary", "logger"))
+source("load_required_libraries.R")
 ```
+
+This will automatically install any missing packages from the `required_libraries` list defined in `load_required_libraries.R`.
+
+**Note:** INLA requires separate installation due to its specific build requirements. 
 
 ## Refactor
 
