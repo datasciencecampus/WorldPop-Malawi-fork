@@ -39,6 +39,7 @@ required_libraries <- c(
   "modelsummary", # used to quickly produce DataFrame summaries
   "nngeo", # nearest neighbour in geospatial
   "raster", # raster data handling
+  "rmarkdown", # R Markdown document rendering and HTML report generation
   "sf", # package for handling spatial data
   "spdep", # spatial dependence and weights
   "terra", # package for spatial data analysis
