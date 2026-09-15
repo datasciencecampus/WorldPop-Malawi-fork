@@ -16,8 +16,7 @@ source("src/data_processing/data_processing_helpers.R")
 #'
 #'
 data_processing_2_function <- function() {
-
-log_info("Begining data Processing,")
+  log_info("Begining data Processing,")
 
   # setup
   ## this section includes loading config, variables and any datasets
@@ -25,10 +24,12 @@ log_info("Begining data Processing,")
   if (is.null(config)) {
     stop("Config could not be loaded.")
   }
+
+  print("test")
   print("Config loaded")
-  
+
   log_info("dp1 - Loading config, reading data..")
-  #Specify Drive Path
+  # Specify Drive Path
   data_dirs <- config$paths
 
   drive_path <- data_dirs$drive_path
@@ -39,7 +40,7 @@ log_info("Begining data Processing,")
   data_sources <- config$sources
   data_thresholds <- config$thresholds
 
-  #Load datasets
+  # Load datasets
   mphc_2018 <- read_dta(file.path(input_path, data_sources$mphc$data_file))
   ICT_data <- read_dta(file.path(input_path, data_sources$ict$data_file))
   IHS6_data <- read_dta(file.path(input_path, data_sources$ihs6$data_file))
@@ -61,28 +62,28 @@ log_info("Begining data Processing,")
   n_total_eas <- length(unique(ea$EA_CODE))
 
   log_info("dp2 - processing census data")
-  mphc_rbind    <- process_census_data(mphc_2018, ea, output_path)
-  
+  mphc_rbind <- process_census_data(mphc_2018, ea, output_path)
+
   # Deduplicate raw census data to household level for report metrics
   # (mphc_rbind is EA-aggregated and no longer has hhnumber)
   mphc_hh <- mphc_2018 %>%
     mutate(EA_CODE = make_ea_code(district, ta, ea)) %>%
     distinct(EA_CODE, !!as.name(data_sources$mphc$household_id_col), .keep_all = TRUE)
-  
+
   mphc_ea_covered <- length(unique(mphc_hh$EA_CODE))
-  
+
   mphc_dp_stats <- tibble::tibble(
-      source           = "mphc",
-      n_total          = nrow(mphc_2018),
-      n_no_gps         = sum(is.na(mphc_2018[[data_sources$mphc$longitude_col]]) |
-                             is.na(mphc_2018[[data_sources$mphc$latitude_col]])),
-      n_accurate_gps   = NA_integer_,
-      n_inaccurate_gps = NA_integer_,
-      n_ea_changed     = NA_integer_,
-      n_ea_covered     = mphc_ea_covered,
-      n_total_eas      = n_total_eas
+    source = "mphc",
+    n_total = nrow(mphc_2018),
+    n_no_gps = sum(is.na(mphc_2018[[data_sources$mphc$longitude_col]]) |
+      is.na(mphc_2018[[data_sources$mphc$latitude_col]])),
+    n_accurate_gps = NA_integer_,
+    n_inaccurate_gps = NA_integer_,
+    n_ea_changed = NA_integer_,
+    n_ea_covered = mphc_ea_covered,
+    n_total_eas = n_total_eas
   )
-  
+
   log_info("dp3 - processing ICT data")
   ict_result <- process_gps_household_data(
     survey_data = ICT_data,
@@ -149,17 +150,18 @@ log_info("Begining data Processing,")
   # ── Write transformation stats ──────────────────────────────────────────────────
   log_info("dp6.5 - writing transformation stats")
   transformation_stats <- dplyr::bind_rows(
-      mphc_dp_stats %>% mutate(source = "mphc"),
-      ict_stats %>% mutate(source = "ict"),
-      IHS_stats %>% mutate(source = "ihs6"),
-      Naca_stats %>% mutate(source = "naca"),
-      dhs_stats %>% mutate(source = "dhs_listing")
+    mphc_dp_stats %>% mutate(source = "mphc"),
+    ict_stats %>% mutate(source = "ict"),
+    IHS_stats %>% mutate(source = "ihs6"),
+    Naca_stats %>% mutate(source = "naca"),
+    dhs_stats %>% mutate(source = "dhs_listing")
   )
   qa_stats_dir <- file.path(drive_path, "quality_assurance")
   dir.create(qa_stats_dir, recursive = TRUE, showWarnings = FALSE)
   write.csv(transformation_stats,
-      file.path(qa_stats_dir, "data_processing2_transformation_stats.csv"),
-      row.names = FALSE)
+    file.path(qa_stats_dir, "data_processing2_transformation_stats.csv"),
+    row.names = FALSE
+  )
 
   log_info("dp7 - processing DHS survey data")
   dhs_hh_size <- process_dhs_survey_data(
