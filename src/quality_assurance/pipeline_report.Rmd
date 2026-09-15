@@ -35,9 +35,8 @@ params:
 .log-warn      { color:#ce9178; }
 .log-info      { color:#9cdcfe; }
 
-/* ---- QA table highlight ---- */
-.tbl-pass td   { background:#eafaf1; }
-.tbl-fail td   { background:#fdedec; }
+
+
 
 /* ---- pipeline script section headers ---- */
 h2 { border-top: 3px solid #2980b9; padding-top: 14px; margin-top: 36px; }
@@ -142,11 +141,60 @@ tibble::tibble(
 ) %>%
   kable(col.names = NULL) %>%
   kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE) %>%
-  row_spec(5, bold = TRUE,
-    background = switch(overall_status, PASS = "#eafaf1", FAIL = "#fdedec", "#f5f5f5"))
+  row_spec(5, bold = TRUE)
 ```
 
-**Overall Quality Assurance status:** <span class="`r status_badge_class`">`r overall_status`</span>
+### Quality Assurance results
+
+```{r qa-status-banner, results='asis'}
+cat(sprintf('<p style="font-size:1.2em">Pipeline Quality Assurance status: <span class="%s">%s</span></p>\n',
+  status_badge_class, overall_status))
+```
+
+**What this means:**
+
+Quality Assurance validates pipeline outputs against baseline reference data to ensure consistent data transformations and detect regressions.
+
+- **PASS:** All output values match the baseline, confirming data integrity and consistency.
+- **FAIL:** Output values differ from the baseline, indicating either intentional pipeline modifications or a potential regression.
+- **SKIPPED:** No baseline files available; QA comparison cannot run.
+
+*Baseline files are validated reference datasets created during previous successful pipeline runs and archived for reproducibility. They serve as a checkpoint to ensure the pipeline maintains consistent processing logic and helps quickly identify unintended changes.*
+
+**Note:** Quality Assurance is currently implemented for the data_processing2 stage. Additional pipeline stages will have QA coverage added in future updates.
+
+```{r qa-summary-table}
+qa_summary_raw %>%
+  mutate(
+    `Columns compared`   = total_columns_compared,
+    `Value mismatches`   = total_mismatches,
+    `Duplicate keys (current)` = total_current_duplicate_keys,
+    `Duplicate keys (baseline)` = total_baseline_duplicate_keys,
+    `Key drift datasets` = datasets_with_duplicate_key_drift,
+    Status = status
+  ) %>%
+  select(Script = report_prefix, Status,
+         `Columns compared`, `Value mismatches`,
+         `Duplicate keys (current)`, `Duplicate keys (baseline)`,
+         `Key drift datasets`) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
+```
+
+#### Column mismatch detail
+
+```{r qa-col-table}
+if (nrow(qa_col_raw[qa_col_raw$mismatches > 0, ]) > 0) {
+  qa_col_raw[qa_col_raw$mismatches > 0, ] %>%
+    select(Dataset = dataset, Column = column,
+           `Total rows` = total_rows, Mismatches = mismatches,
+           `% mismatch` = pct_mismatch) %>%
+    kable() %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
+} else {
+  cat("✓ No column-level mismatches found across all compared datasets.")
+}
+```
 
 ---
 
@@ -243,8 +291,7 @@ if (!ea_shp_available) {
     )
   ) %>%
     kable(col.names = NULL) %>%
-    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE) %>%
-    row_spec(which(n_dup > 0), background = "#fdedec")
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
 }
 ```
 
@@ -277,8 +324,7 @@ if (!seg_csv_available) {
     )
   ) %>%
     kable(col.names = NULL) %>%
-    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE) %>%
-    row_spec(3, background = "#fff3cd")
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
 }
 ```
 
@@ -765,11 +811,7 @@ if (!transform_stats_available) {
     )
     filter_tbl %>%
       kable() %>%
-      kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE) %>%
-      row_spec(2, background = "#fff3cd") %>%
-      row_spec(3, background = "#fff3cd") %>%
-      row_spec(4, background = "#eafaf1") %>%
-      {if (has_ea_cols) row_spec(., 5, background = "#e8f4f8") else .}
+      kable_styling(bootstrap_options = c("condensed", "hover", "condensed"), full_width = FALSE)
   }
 }
 ```
@@ -794,8 +836,7 @@ if (!output_coverage_available) {
     )
   ) %>%
     kable(col.names = NULL) %>%
-    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE) %>%
-    row_spec(4, background = if (n_missing > 0) "#fdedec" else "#eafaf1")
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
 }
 ```
 
@@ -831,68 +872,6 @@ for (i in seq_len(nrow(log_df))) {
 cat('</div>\n')
 ```
 </details>
-
----
-
-### Quality Assurance results
-
-```{r qa-status-banner, results='asis'}
-cat(sprintf('<p style="font-size:1.2em">Pipeline Quality Assurance status: <span class="%s">%s</span></p>\n',
-  status_badge_class, overall_status))
-```
-
-```{r qa-summary-table}
-qa_summary_raw %>%
-  mutate(
-    `Columns compared`   = total_columns_compared,
-    `Value mismatches`   = total_mismatches,
-    `Duplicate keys (current)` = total_current_duplicate_keys,
-    `Duplicate keys (baseline)` = total_baseline_duplicate_keys,
-    `Key drift datasets` = datasets_with_duplicate_key_drift,
-    Status = status
-  ) %>%
-  select(Script = report_prefix, Status,
-         `Columns compared`, `Value mismatches`,
-         `Duplicate keys (current)`, `Duplicate keys (baseline)`,
-         `Key drift datasets`) %>%
-  kable() %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE) %>%
-  row_spec(which(qa_summary_raw$status == "PASS"), background = "#eafaf1") %>%
-  row_spec(which(qa_summary_raw$status == "FAIL"), background = "#fdedec")
-```
-
-#### Duplicate key detail
-
-```{r qa-dup-table}
-qa_dup_raw %>%
-  mutate(
-    `Key drift` = ifelse(duplicate_key_drift, "⚠ YES", "✓ No"),
-    `Current duplicates` = ifelse(current_duplicate_key_count == 0, "None",
-      paste0(current_duplicate_key_count, " (", current_duplicate_keys, ")")),
-    `Baseline duplicates` = ifelse(baseline_duplicate_key_count == 0, "None",
-      paste0(baseline_duplicate_key_count, " (see full report)"))
-  ) %>%
-  select(Dataset = dataset, `Key drift`, `Current duplicates`, `Baseline duplicates`) %>%
-  kable() %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE) %>%
-  row_spec(which(qa_dup_raw$duplicate_key_drift), background = "#fdedec")
-```
-
-#### Column mismatch detail
-
-```{r qa-col-table}
-if (nrow(qa_col_raw[qa_col_raw$mismatches > 0, ]) > 0) {
-  qa_col_raw[qa_col_raw$mismatches > 0, ] %>%
-    select(Dataset = dataset, Column = column,
-           `Total rows` = total_rows, Mismatches = mismatches,
-           `% mismatch` = pct_mismatch) %>%
-    kable() %>%
-    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE) %>%
-    row_spec(seq_len(nrow(qa_col_raw[qa_col_raw$mismatches > 0, ])), background = "#fdedec")
-} else {
-  cat("✓ No column-level mismatches found across all compared datasets.")
-}
-```
 
 ---
 
