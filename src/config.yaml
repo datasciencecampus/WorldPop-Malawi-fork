@@ -17,9 +17,9 @@ paths:
 
 profiles:
   "2024":
-    shapefile_path: ./data/Shapefiles/2018_MPHC_EAs_Final_for_Use.shp
+    shapefile_path: ./data/Shapefiles/2018_MPHC_EAs_Final_for_Use_Corrected.shp
   "2018":
-    shapefile_path: ./data/Shapefiles/2018_MPHC_EAs_Final_for_Use.shp
+    shapefile_path: ./data/Shapefiles/2018_MPHC_EAs_Final_for_Use_Corrected.shp
 
 sources:
   mphc:
