@@ -111,6 +111,25 @@ log_df <- classify_log(raw_log_lines)
 n_errors <- sum(log_df$level == "ERROR")
 n_warns  <- sum(log_df$level == "WARN")
 
+# Extract survey-only EA coverage from log
+survey_coverage_line <- grep("Survey-only EA coverage:", raw_log_lines, value = TRUE)
+survey_only_ea_count <- NA
+survey_only_ea_total <- NA
+survey_only_ea_pct <- NA
+
+if (length(survey_coverage_line) > 0) {
+  # More flexible regex to handle logger timestamp/format
+  # Looks for pattern: ... Survey-only EA coverage: NUMBER out of NUMBER EAs (PERCENT%)
+  match <- regmatches(survey_coverage_line[1], 
+    regexec("Survey-only EA coverage: (\\d+) out of (\\d+) EAs \\(([0-9.]+)%\\)", 
+            survey_coverage_line[1]))
+  if (length(match) > 0 && length(match[[1]]) >= 4) {
+    survey_only_ea_count <- as.numeric(match[[1]][2])
+    survey_only_ea_total <- as.numeric(match[[1]][3])
+    survey_only_ea_pct <- as.numeric(match[[1]][4])
+  }
+}
+
 # Overall status from QA
 overall_status <- if (nrow(qa_summary_raw) == 0) "SKIPPED" else {
   statuses <- unique(qa_summary_raw$status)
@@ -767,74 +786,28 @@ if (!mphc_available) {
 }
 ```
 
-#### DHS listing — cluster filter stages
-
-```{r transform-dhs}
-if (!transform_stats_available) {
-  cat("_Not available._")
-} else {
-  row <- transform_raw %>% filter(source == "dhs_listing")
-  if (nrow(row) == 0) { cat("_DHS listing stats not found._") } else {
-    max_dist <- if (config_loaded) cfg$thresholds$dhs_max_distance_m else "?"
-    dhs_ea_cov <- if ("n_ea_covered" %in% names(row)) row$n_ea_covered else NA
-    has_ea_cols <- all(c("n_ea_covered", "n_total_eas") %in% names(row))
-    
-    filter_tbl <- tibble::tibble(
-      Stage = c(
-        "Total clusters in raw file",
-        "After segmentation filter",
-        paste0("After distance filter (> ", max_dist, "m excluded)"),
-        "Clusters used for EA assignment",
-        if (has_ea_cols) "EA coverage" else NULL
-      ),
-      Count    = c(
-        format(row$n_total_clusters, big.mark = ","),
-        format(row$n_nonseg_clusters, big.mark = ","),
-        format(row$n_within_dist, big.mark = ","),
-        format(row$n_within_dist, big.mark = ","),
-        if (has_ea_cols && !is.na(dhs_ea_cov) && !is.na(row$n_total_eas)) {
-          paste0(format(dhs_ea_cov, big.mark = ","), " / ", format(row$n_total_eas, big.mark = ","),
-                 " (", round(dhs_ea_cov / row$n_total_eas * 100, 1), "%)")
-        } else if (has_ea_cols) {
-          "N/A"
-        } else {
-          NULL
-        }
-      ),
-      Excluded = c(
-        "",
-        paste0(row$n_seg_excluded,  " excluded"),
-        paste0(row$n_dist_excluded, " excluded"),
-        "",
-        if (has_ea_cols) "" else NULL
-      )
-    )
-    filter_tbl %>%
-      kable() %>%
-      kable_styling(bootstrap_options = c("condensed", "hover", "condensed"), full_width = FALSE)
-  }
-}
-```
-
-#### Output EA coverage
+#### EA coverage from surveys
 
 ```{r transform-coverage}
-if (!output_coverage_available) {
-  cat("_Output CSV or EA shapefile not available._")
+if (is.na(survey_only_ea_count)) {
+  cat("_Survey EA coverage metric not available in log._")
 } else {
-  n_ea_shp    <- n_distinct(ea_shp$EA_CODE)
-  n_ea_output <- n_distinct(output_csv$EA_CODE)
-  n_missing   <- n_ea_shp - n_ea_output
-  tibble::tibble(
-    Metric = c("Total EAs in shapefile", "EAs present in output",
-               "EA coverage", "EAs with no data"),
+  n_ea_shp    <- length(unique(ea_shp$EA_CODE))
+  n_missing   <- n_ea_shp - survey_only_ea_count
+  
+  # Build metrics table showing survey-only coverage
+  metrics_tbl <- tibble::tibble(
+    Metric = c("Total EAs in shapefile", "EAs with survey data",
+               "Survey coverage %", "EAs with no survey data"),
     Value  = c(
-      format(n_ea_shp,    big.mark = ","),
-      format(n_ea_output, big.mark = ","),
-      paste0(round(n_ea_output / n_ea_shp * 100, 1), "%"),
-      format(n_missing,   big.mark = ",")
+      format(n_ea_shp,              big.mark = ","),
+      format(survey_only_ea_count,  big.mark = ","),
+      paste0(survey_only_ea_pct, "%"),
+      format(n_missing,             big.mark = ",")
     )
-  ) %>%
+  )
+  
+  metrics_tbl %>%
     kable(col.names = NULL) %>%
     kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
 }

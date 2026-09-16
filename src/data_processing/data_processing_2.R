@@ -222,6 +222,20 @@ data_processing_2_function <- function() {
       starts_with("age_")
     )
 
+  # Calculate survey-only EA coverage (EAs with data from at least one survey source)
+  log_info("dp9.5 - calculating survey-only EA coverage")
+  survey_only_ea_coverage <- output_df %>%
+    filter(!is.na(malemia_hh_count) |
+           !is.na(dhs_hh_count) |
+           !is.na(ihs_hh_count) |
+           !is.na(naca_hh_count) |
+           !is.na(ict_hh_count) |
+           !is.na(zomba_hh_count)) %>%
+    pull(EA_CODE) %>%
+    n_distinct()
+  
+  log_info("dp9.5 - Survey-only EA coverage: {survey_only_ea_coverage} out of {n_total_eas} EAs ({round(survey_only_ea_coverage/n_total_eas*100, 1)}%)")
+
   log_info("dp10 - writing summarized survey csv")
   write.csv(
     output_df,
