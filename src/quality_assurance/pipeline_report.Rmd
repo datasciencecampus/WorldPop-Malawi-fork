@@ -642,40 +642,6 @@ if (!transform_stats_available) {
 }
 ```
 
-#### MPHC census — GPS split (household level)
-
-```{r transform-mphc}
-if (!mphc_available) {
-  cat("_Data not available._")
-} else {
-  lon      <- mphc_hh[[mphc_cfg$longitude_col]]
-  lat      <- mphc_hh[[mphc_cfg$latitude_col]]
-  n_hh_total  <- nrow(mphc_hh)
-  n_hh_with_gps  <- sum(!is.na(lon) & !is.na(lat))
-  n_hh_without_gps <- n_hh_total - n_hh_with_gps
-  mphc_ea_cov <- length(unique(mphc_hh$EA_CODE))
-  tibble::tibble(
-    Metric = c("Total households",
-               "With GPS (spatially assigned via shapefile)",
-               "Without GPS (EA_CODE constructed from district + TA + EA)",
-               "EA coverage"),
-    Value  = c(
-      format(n_hh_total, big.mark = ","),
-      paste0(format(n_hh_with_gps, big.mark = ","),
-             " (", round(n_hh_with_gps / n_hh_total * 100, 1), "%)"),
-      paste0(format(n_hh_without_gps, big.mark = ","),
-             " (", round(n_hh_without_gps / n_hh_total * 100, 1), "%)"),
-      ifelse(!is.na(n_total_eas),
-        paste0(format(mphc_ea_cov, big.mark = ","), " / ", format(n_total_eas, big.mark = ","),
-               " (", round(mphc_ea_cov / n_total_eas * 100, 1), "%)"),
-        "N/A")
-    )
-  ) %>%
-    kable(col.names = NULL) %>%
-    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
-}
-```
-
 #### EA coverage from surveys
 
 ```{r transform-coverage}
