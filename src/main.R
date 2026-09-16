@@ -153,6 +153,10 @@ logger::log_info("Run log written: {run_log_file}")
 logger::log_appender(logger::appender_file(run_log_file))
 
 # ---- Render HTML pipeline report -----------------------------------------------
+# NOTE: To test report modifications without running data_processing2,
+#       run: source("run_report_standalone.R")
+#       This uses the most recent pipeline outputs for faster iteration.
+
 tryCatch({
     # Configure Pandoc (checks system PATH, then Quarto install, then common locations)
     setup_pandoc()

@@ -41,6 +41,18 @@ This will:
 4. **Run parity QA** comparing current outputs against baseline files
 5. **Generate HTML report** showing source data profiles, transformations, QA results, and pipeline logs
 
+#### Testing Report Modifications
+
+To iterate on report design without running the full data processing pipeline, use:
+
+```r
+source("run_report_standalone.R")
+```
+
+This loads your most recent pipeline's outputs and renders the report in seconds, allowing quick testing of report layout and styling changes. 
+
+**Note:** `run_report_standalone.R` is a temporary utility file created during development. It should be **deleted once the pipeline is complete** before sharing or archiving the repository.
+
 ### Current Output
 
 The pipeline produces:
