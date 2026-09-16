@@ -182,38 +182,6 @@ Quality Assurance validates pipeline outputs against baseline reference data to 
 
 **Note:** Quality Assurance is currently implemented for the data_processing2 stage. Additional pipeline stages will have QA coverage added in future updates.
 
-```{r qa-summary-table}
-qa_summary_raw %>%
-  mutate(
-    `Columns compared`   = total_columns_compared,
-    `Value mismatches`   = total_mismatches,
-    `Duplicate keys (current)` = total_current_duplicate_keys,
-    `Duplicate keys (baseline)` = total_baseline_duplicate_keys,
-    `Key drift datasets` = datasets_with_duplicate_key_drift,
-    Status = status
-  ) %>%
-  select(Script = report_prefix, Status,
-         `Columns compared`, `Value mismatches`,
-         `Duplicate keys (current)`, `Duplicate keys (baseline)`,
-         `Key drift datasets`) %>%
-  kable() %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
-```
-
-#### Column mismatch detail
-
-```{r qa-col-table}
-if (nrow(qa_col_raw[qa_col_raw$mismatches > 0, ]) > 0) {
-  qa_col_raw[qa_col_raw$mismatches > 0, ] %>%
-    select(Dataset = dataset, Column = column,
-           `Total rows` = total_rows, Mismatches = mismatches,
-           `% mismatch` = pct_mismatch) %>%
-    kable() %>%
-    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
-} else {
-  cat("✓ No column-level mismatches found across all compared datasets.")
-}
-```
 
 ---
 
@@ -845,6 +813,48 @@ for (i in seq_len(nrow(log_df))) {
 cat('</div>\n')
 ```
 </details>
+
+### Quality Assurance results for data_processing2
+
+This section compares the final Data Processing 2 outputs against validated baseline files to confirm data integrity and consistency. The outputs being validated are:
+
+- **summarized_survey_data.csv** — EA-level household counts aggregated from all survey sources
+- **hh_size_data.gpkg** — Spatial household size summaries with EA geometries
+
+The Quality Assurance process compares all columns in these outputs against baseline versions using an exact-match parity check. Any value differences are reported in the "Column mismatch detail" section below.
+
+```{r qa-summary-table}
+qa_summary_raw %>%
+  mutate(
+    `Columns compared`   = total_columns_compared,
+    `Value mismatches`   = total_mismatches,
+    `Duplicate keys (current)` = total_current_duplicate_keys,
+    `Duplicate keys (baseline)` = total_baseline_duplicate_keys,
+    `Key drift datasets` = datasets_with_duplicate_key_drift,
+    Status = status
+  ) %>%
+  select(Script = report_prefix, Status,
+         `Columns compared`, `Value mismatches`,
+         `Duplicate keys (current)`, `Duplicate keys (baseline)`,
+         `Key drift datasets`) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
+```
+
+#### Column mismatch detail
+
+```{r qa-col-table}
+if (nrow(qa_col_raw[qa_col_raw$mismatches > 0, ]) > 0) {
+  qa_col_raw[qa_col_raw$mismatches > 0, ] %>%
+    select(Dataset = dataset, Column = column,
+           `Total rows` = total_rows, Mismatches = mismatches,
+           `% mismatch` = pct_mismatch) %>%
+    kable() %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
+} else {
+  cat("✓ No column-level mismatches found across all compared datasets.")
+}
+```
 
 ---
 
