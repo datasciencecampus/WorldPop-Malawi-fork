@@ -222,7 +222,6 @@ if (!config_loaded) {
       "NACA listing",
       "DHS listing",
       "DHS segmented clusters",
-      "DHS survey",
       "Zomba CSVs",
       "Malemia"
     ),
@@ -234,7 +233,6 @@ if (!config_loaded) {
       file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$naca$data_file),
       file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$dhs_listing$data_file),
       file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$dhs_listing$segmented_csv),
-      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$dhs_survey$data_file),
       file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$zomba$csv_dir),
       file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$malemia$data_file)
     )
@@ -275,39 +273,6 @@ if (!ea_shp_available) {
       format(n_codes, big.mark = ","),
       ifelse(n_dup > 0, paste0(format(n_dup, big.mark = ","), " ⚠"), "None"),
       sf::st_crs(ea_shp)$input
-    )
-  ) %>%
-    kable(col.names = NULL) %>%
-    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
-}
-```
-
-#### DHS segmented clusters — reference filter
-
-```{r seg-csv-load, include=FALSE}
-seg_csv_available <- FALSE
-if (config_loaded && !is.null(cfg$sources$dhs_listing$segmented_csv)) {
-  seg_path <- file.path(mnso_dir, cfg$sources$dhs_listing$segmented_csv)
-  if (file.exists(seg_path)) {
-    seg_raw <- read.csv(seg_path, stringsAsFactors = FALSE)
-    seg_csv_available <- TRUE
-  }
-}
-```
-
-```{r seg-csv-shape}
-if (!seg_csv_available) {
-  cat("_Segmented CSV not available at render time._")
-} else {
-  n_total  <- nrow(seg_raw)
-  n_nonseg <- sum(grepl("^no\\b", seg_raw$Cluster.Segmented, ignore.case = TRUE))
-  n_seg    <- n_total - n_nonseg
-  tibble::tibble(
-    Metric = c("Total clusters", "Non-segmented (used in pipeline)", "Segmented (excluded)"),
-    Value  = c(
-      format(n_total,  big.mark = ","),
-      format(n_nonseg, big.mark = ","),
-      format(n_seg,    big.mark = ",")
     )
   ) %>%
     kable(col.names = NULL) %>%
@@ -493,57 +458,14 @@ if (config_loaded && !is.null(cfg$sources$dhs_listing)) {
 if (!dhs_listing_available) {
   cat("_Source file not available at render time._")
 } else {
-  lon      <- dhs_listing_raw[[dhs_listing_cfg$longitude_col]]
-  lat      <- dhs_listing_raw[[dhs_listing_cfg$latitude_col]]
-  n        <- nrow(dhs_listing_raw)
-  n_miss   <- sum(is.na(lon) | is.na(lat))
-  pct_miss <- round(n_miss / n * 100, 1)
+  n_households <- nrow(dhs_listing_raw)
+  n_clusters <- n_distinct(dhs_listing_raw[[cfg$sources$dhs_listing$cluster_id_col]])
+  
   tibble::tibble(
-    Metric = c("Total household listings", "Unique clusters (QHCLUST)", "Missing lon, lat, or both"),
+    Metric = c("Total household listings", "Total clusters"),
     Value  = c(
-      format(n, big.mark = ","),
-      format(n_distinct(dhs_listing_raw[[dhs_listing_cfg$cluster_id_col]]), big.mark = ","),
-      paste0(format(n_miss, big.mark = ","), " (", pct_miss, "%)")
-    )
-  ) %>%
-    kable(col.names = NULL) %>%
-    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
-}
-```
-
-#### dhs_survey — DHS Household Survey
-
-```{r dhs-survey-load, include=FALSE}
-dhs_survey_available <- FALSE
-if (config_loaded && !is.null(cfg$sources$dhs_survey)) {
-  dhs_survey_cfg  <- cfg$sources$dhs_survey
-  dhs_survey_path <- file.path(mnso_dir, dhs_survey_cfg$data_file)
-  if (file.exists(dhs_survey_path)) {
-    dhs_survey_raw <- haven::read_dta(dhs_survey_path) %>% haven::zap_labels()
-    dhs_survey_available <- TRUE
-  }
-}
-```
-
-```{r dhs-survey-shape}
-if (!dhs_survey_available) {
-  cat("_Source file not available at render time._")
-} else {
-  lon      <- dhs_survey_raw[[dhs_survey_cfg$longitude_col]]
-  lat      <- dhs_survey_raw[[dhs_survey_cfg$latitude_col]]
-  n        <- nrow(dhs_survey_raw)
-  n_miss   <- sum(is.na(lon) | is.na(lat))
-  pct_miss <- round(n_miss / n * 100, 1)
-  n_hh     <- n_distinct(paste0(
-    dhs_survey_raw[[dhs_survey_cfg$cluster_id_col]], "_",
-    dhs_survey_raw[[dhs_survey_cfg$household_id_col]]
-  ))
-  tibble::tibble(
-    Metric = c("Unique households (cluster + QHNUMBER)", "Unique clusters (QHCLUST)", "Missing lon, lat, or both"),
-    Value  = c(
-      format(n_hh, big.mark = ","),
-      format(n_distinct(dhs_survey_raw[[dhs_survey_cfg$cluster_id_col]]), big.mark = ","),
-      paste0(format(n_miss, big.mark = ","), " (", pct_miss, "%)")
+      format(n_households, big.mark = ","),
+      format(n_clusters, big.mark = ",")
     )
   ) %>%
     kable(col.names = NULL) %>%
