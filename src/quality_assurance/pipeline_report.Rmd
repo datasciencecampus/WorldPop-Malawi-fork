@@ -18,6 +18,7 @@ params:
   qa_duplicate_csv: NULL
   config_path:              NULL
   transformation_stats_csv: NULL
+  sys_info:        NULL
 ---
 
 ```{css, echo=FALSE}
@@ -34,9 +35,8 @@ params:
 .log-warn      { color:#ce9178; }
 .log-info      { color:#9cdcfe; }
 
-/* ---- QA table highlight ---- */
-.tbl-pass td   { background:#eafaf1; }
-.tbl-fail td   { background:#fdedec; }
+
+
 
 /* ---- pipeline script section headers ---- */
 h2 { border-top: 3px solid #2980b9; padding-top: 14px; margin-top: 36px; }
@@ -111,6 +111,25 @@ log_df <- classify_log(raw_log_lines)
 n_errors <- sum(log_df$level == "ERROR")
 n_warns  <- sum(log_df$level == "WARN")
 
+# Extract survey-only EA coverage from log
+survey_coverage_line <- grep("Survey-only EA coverage:", raw_log_lines, value = TRUE)
+survey_only_ea_count <- NA
+survey_only_ea_total <- NA
+survey_only_ea_pct <- NA
+
+if (length(survey_coverage_line) > 0) {
+  # More flexible regex to handle logger timestamp/format
+  # Looks for pattern: ... Survey-only EA coverage: NUMBER out of NUMBER EAs (PERCENT%)
+  match <- regmatches(survey_coverage_line[1], 
+    regexec("Survey-only EA coverage: (\\d+) out of (\\d+) EAs \\(([0-9.]+)%\\)", 
+            survey_coverage_line[1]))
+  if (length(match) > 0 && length(match[[1]]) >= 4) {
+    survey_only_ea_count <- as.numeric(match[[1]][2])
+    survey_only_ea_total <- as.numeric(match[[1]][3])
+    survey_only_ea_pct <- as.numeric(match[[1]][4])
+  }
+}
+
 # Overall status from QA
 overall_status <- if (nrow(qa_summary_raw) == 0) "SKIPPED" else {
   statuses <- unique(qa_summary_raw$status)
@@ -141,11 +160,28 @@ tibble::tibble(
 ) %>%
   kable(col.names = NULL) %>%
   kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE) %>%
-  row_spec(5, bold = TRUE,
-    background = switch(overall_status, PASS = "#eafaf1", FAIL = "#fdedec", "#f5f5f5"))
+  row_spec(5, bold = TRUE)
 ```
 
-**Overall Quality Assurance status:** <span class="`r status_badge_class`">`r overall_status`</span>
+### Quality Assurance results
+
+```{r qa-status-banner, results='asis'}
+cat(sprintf('<p style="font-size:1.2em">Pipeline Quality Assurance status: <span class="%s">%s</span></p>\n',
+  status_badge_class, overall_status))
+```
+
+**What this means:**
+
+Quality Assurance validates pipeline outputs against baseline reference data to ensure consistent data transformations and detect regressions.
+
+- **PASS:** All output values match the baseline, confirming data integrity and consistency.
+- **FAIL:** Output values differ from the baseline, indicating either intentional pipeline modifications or a potential regression.
+- **SKIPPED:** No baseline files available; QA comparison cannot run.
+
+*Baseline files are validated reference datasets created during previous successful pipeline runs and archived for reproducibility. They serve as a checkpoint to ensure the pipeline maintains consistent processing logic and helps quickly identify unintended changes.*
+
+**Note:** Quality Assurance is currently implemented for the data_processing2 stage. Additional pipeline stages will have QA coverage added in future updates.
+
 
 ---
 
@@ -186,21 +222,19 @@ if (!config_loaded) {
       "NACA listing",
       "DHS listing",
       "DHS segmented clusters",
-      "DHS survey",
       "Zomba CSVs",
       "Malemia"
     ),
     `File / Folder` = c(
-      "2018_MPHC_EAs_Final_for_Use.shp",
-      basename(cfg$sources$mphc$data_file),
-      basename(cfg$sources$ict$data_file),
-      basename(cfg$sources$ihs6$data_file),
-      basename(cfg$sources$naca$data_file),
-      basename(cfg$sources$dhs_listing$data_file),
-      basename(cfg$sources$dhs_listing$segmented_csv),
-      basename(cfg$sources$dhs_survey$data_file),
-      cfg$sources$zomba$csv_dir,
-      basename(cfg$sources$malemia$data_file)
+      cfg$profiles[[as.character(cfg$run$timepoint)]]$shapefile_path,
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$mphc$data_file),
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$ict$data_file),
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$ihs6$data_file),
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$naca$data_file),
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$dhs_listing$data_file),
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$dhs_listing$segmented_csv),
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$zomba$csv_dir),
+      file.path(cfg$paths$drive_path, cfg$paths$mnso_data_dir, cfg$sources$malemia$data_file)
     )
   ) %>%
     kable() %>%
@@ -242,42 +276,7 @@ if (!ea_shp_available) {
     )
   ) %>%
     kable(col.names = NULL) %>%
-    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE) %>%
-    row_spec(which(n_dup > 0), background = "#fdedec")
-}
-```
-
-#### DHS segmented clusters — reference filter
-
-```{r seg-csv-load, include=FALSE}
-seg_csv_available <- FALSE
-if (config_loaded && !is.null(cfg$sources$dhs_listing$segmented_csv)) {
-  seg_path <- file.path(mnso_dir, cfg$sources$dhs_listing$segmented_csv)
-  if (file.exists(seg_path)) {
-    seg_raw <- read.csv(seg_path, stringsAsFactors = FALSE)
-    seg_csv_available <- TRUE
-  }
-}
-```
-
-```{r seg-csv-shape}
-if (!seg_csv_available) {
-  cat("_Segmented CSV not available at render time._")
-} else {
-  n_total  <- nrow(seg_raw)
-  n_nonseg <- sum(grepl("^no\\b", seg_raw$Cluster.Segmented, ignore.case = TRUE))
-  n_seg    <- n_total - n_nonseg
-  tibble::tibble(
-    Metric = c("Total clusters", "Non-segmented (used in pipeline)", "Segmented (excluded)"),
-    Value  = c(
-      format(n_total,  big.mark = ","),
-      format(n_nonseg, big.mark = ","),
-      format(n_seg,    big.mark = ",")
-    )
-  ) %>%
-    kable(col.names = NULL) %>%
-    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE) %>%
-    row_spec(3, background = "#fff3cd")
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
 }
 ```
 
@@ -459,57 +458,14 @@ if (config_loaded && !is.null(cfg$sources$dhs_listing)) {
 if (!dhs_listing_available) {
   cat("_Source file not available at render time._")
 } else {
-  lon      <- dhs_listing_raw[[dhs_listing_cfg$longitude_col]]
-  lat      <- dhs_listing_raw[[dhs_listing_cfg$latitude_col]]
-  n        <- nrow(dhs_listing_raw)
-  n_miss   <- sum(is.na(lon) | is.na(lat))
-  pct_miss <- round(n_miss / n * 100, 1)
+  n_households <- nrow(dhs_listing_raw)
+  n_clusters <- n_distinct(dhs_listing_raw[[cfg$sources$dhs_listing$cluster_id_col]])
+  
   tibble::tibble(
-    Metric = c("Total household listings", "Unique clusters (QHCLUST)", "Missing lon, lat, or both"),
+    Metric = c("Total household listings", "Total clusters"),
     Value  = c(
-      format(n, big.mark = ","),
-      format(n_distinct(dhs_listing_raw[[dhs_listing_cfg$cluster_id_col]]), big.mark = ","),
-      paste0(format(n_miss, big.mark = ","), " (", pct_miss, "%)")
-    )
-  ) %>%
-    kable(col.names = NULL) %>%
-    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
-}
-```
-
-#### dhs_survey — DHS Household Survey
-
-```{r dhs-survey-load, include=FALSE}
-dhs_survey_available <- FALSE
-if (config_loaded && !is.null(cfg$sources$dhs_survey)) {
-  dhs_survey_cfg  <- cfg$sources$dhs_survey
-  dhs_survey_path <- file.path(mnso_dir, dhs_survey_cfg$data_file)
-  if (file.exists(dhs_survey_path)) {
-    dhs_survey_raw <- haven::read_dta(dhs_survey_path) %>% haven::zap_labels()
-    dhs_survey_available <- TRUE
-  }
-}
-```
-
-```{r dhs-survey-shape}
-if (!dhs_survey_available) {
-  cat("_Source file not available at render time._")
-} else {
-  lon      <- dhs_survey_raw[[dhs_survey_cfg$longitude_col]]
-  lat      <- dhs_survey_raw[[dhs_survey_cfg$latitude_col]]
-  n        <- nrow(dhs_survey_raw)
-  n_miss   <- sum(is.na(lon) | is.na(lat))
-  pct_miss <- round(n_miss / n * 100, 1)
-  n_hh     <- n_distinct(paste0(
-    dhs_survey_raw[[dhs_survey_cfg$cluster_id_col]], "_",
-    dhs_survey_raw[[dhs_survey_cfg$household_id_col]]
-  ))
-  tibble::tibble(
-    Metric = c("Unique households (cluster + QHNUMBER)", "Unique clusters (QHCLUST)", "Missing lon, lat, or both"),
-    Value  = c(
-      format(n_hh, big.mark = ","),
-      format(n_distinct(dhs_survey_raw[[dhs_survey_cfg$cluster_id_col]]), big.mark = ","),
-      paste0(format(n_miss, big.mark = ","), " (", pct_miss, "%)")
+      format(n_households, big.mark = ","),
+      format(n_clusters, big.mark = ",")
     )
   ) %>%
     kable(col.names = NULL) %>%
@@ -686,115 +642,30 @@ if (!transform_stats_available) {
 }
 ```
 
-#### MPHC census — GPS split (household level)
-
-```{r transform-mphc}
-if (!mphc_available) {
-  cat("_Data not available._")
-} else {
-  lon      <- mphc_hh[[mphc_cfg$longitude_col]]
-  lat      <- mphc_hh[[mphc_cfg$latitude_col]]
-  n_hh_total  <- nrow(mphc_hh)
-  n_hh_with_gps  <- sum(!is.na(lon) & !is.na(lat))
-  n_hh_without_gps <- n_hh_total - n_hh_with_gps
-  mphc_ea_cov <- length(unique(mphc_hh$EA_CODE))
-  tibble::tibble(
-    Metric = c("Total households",
-               "With GPS (spatially assigned via shapefile)",
-               "Without GPS (EA_CODE constructed from district + TA + EA)",
-               "EA coverage"),
-    Value  = c(
-      format(n_hh_total, big.mark = ","),
-      paste0(format(n_hh_with_gps, big.mark = ","),
-             " (", round(n_hh_with_gps / n_hh_total * 100, 1), "%)"),
-      paste0(format(n_hh_without_gps, big.mark = ","),
-             " (", round(n_hh_without_gps / n_hh_total * 100, 1), "%)"),
-      ifelse(!is.na(n_total_eas),
-        paste0(format(mphc_ea_cov, big.mark = ","), " / ", format(n_total_eas, big.mark = ","),
-               " (", round(mphc_ea_cov / n_total_eas * 100, 1), "%)"),
-        "N/A")
-    )
-  ) %>%
-    kable(col.names = NULL) %>%
-    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
-}
-```
-
-#### DHS listing — cluster filter stages
-
-```{r transform-dhs}
-if (!transform_stats_available) {
-  cat("_Not available._")
-} else {
-  row <- transform_raw %>% filter(source == "dhs_listing")
-  if (nrow(row) == 0) { cat("_DHS listing stats not found._") } else {
-    max_dist <- if (config_loaded) cfg$thresholds$dhs_max_distance_m else "?"
-    dhs_ea_cov <- if ("n_ea_covered" %in% names(row)) row$n_ea_covered else NA
-    has_ea_cols <- all(c("n_ea_covered", "n_total_eas") %in% names(row))
-    
-    filter_tbl <- tibble::tibble(
-      Stage = c(
-        "Total clusters in raw file",
-        "After segmentation filter",
-        paste0("After distance filter (> ", max_dist, "m excluded)"),
-        "Clusters used for EA assignment",
-        if (has_ea_cols) "EA coverage" else NULL
-      ),
-      Count    = c(
-        format(row$n_total_clusters, big.mark = ","),
-        format(row$n_nonseg_clusters, big.mark = ","),
-        format(row$n_within_dist, big.mark = ","),
-        format(row$n_within_dist, big.mark = ","),
-        if (has_ea_cols && !is.na(dhs_ea_cov) && !is.na(row$n_total_eas)) {
-          paste0(format(dhs_ea_cov, big.mark = ","), " / ", format(row$n_total_eas, big.mark = ","),
-                 " (", round(dhs_ea_cov / row$n_total_eas * 100, 1), "%)")
-        } else if (has_ea_cols) {
-          "N/A"
-        } else {
-          NULL
-        }
-      ),
-      Excluded = c(
-        "",
-        paste0(row$n_seg_excluded,  " excluded"),
-        paste0(row$n_dist_excluded, " excluded"),
-        "",
-        if (has_ea_cols) "" else NULL
-      )
-    )
-    filter_tbl %>%
-      kable() %>%
-      kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE) %>%
-      row_spec(2, background = "#fff3cd") %>%
-      row_spec(3, background = "#fff3cd") %>%
-      row_spec(4, background = "#eafaf1") %>%
-      {if (has_ea_cols) row_spec(., 5, background = "#e8f4f8") else .}
-  }
-}
-```
-
-#### Output EA coverage
+#### EA coverage from surveys
 
 ```{r transform-coverage}
-if (!output_coverage_available) {
-  cat("_Output CSV or EA shapefile not available._")
+if (is.na(survey_only_ea_count)) {
+  cat("_Survey EA coverage metric not available in log._")
 } else {
-  n_ea_shp    <- n_distinct(ea_shp$EA_CODE)
-  n_ea_output <- n_distinct(output_csv$EA_CODE)
-  n_missing   <- n_ea_shp - n_ea_output
-  tibble::tibble(
-    Metric = c("Total EAs in shapefile", "EAs present in output",
-               "EA coverage", "EAs with no data"),
+  n_ea_shp    <- length(unique(ea_shp$EA_CODE))
+  n_missing   <- n_ea_shp - survey_only_ea_count
+  
+  # Build metrics table showing survey-only coverage
+  metrics_tbl <- tibble::tibble(
+    Metric = c("Total EAs in shapefile", "EAs with survey data",
+               "Survey coverage %", "EAs with no survey data"),
     Value  = c(
-      format(n_ea_shp,    big.mark = ","),
-      format(n_ea_output, big.mark = ","),
-      paste0(round(n_ea_output / n_ea_shp * 100, 1), "%"),
-      format(n_missing,   big.mark = ",")
+      format(n_ea_shp,              big.mark = ","),
+      format(survey_only_ea_count,  big.mark = ","),
+      paste0(survey_only_ea_pct, "%"),
+      format(n_missing,             big.mark = ",")
     )
-  ) %>%
+  )
+  
+  metrics_tbl %>%
     kable(col.names = NULL) %>%
-    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE) %>%
-    row_spec(4, background = if (n_missing > 0) "#fdedec" else "#eafaf1")
+    kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
 }
 ```
 
@@ -831,14 +702,14 @@ cat('</div>\n')
 ```
 </details>
 
----
+### Quality Assurance results for data_processing2
 
-### Quality Assurance results
+This section compares the final Data Processing 2 outputs against validated baseline files to confirm data integrity and consistency. The outputs being validated are:
 
-```{r qa-status-banner, results='asis'}
-cat(sprintf('<p style="font-size:1.2em">Pipeline Quality Assurance status: <span class="%s">%s</span></p>\n',
-  status_badge_class, overall_status))
-```
+- **summarized_survey_data.csv** — EA-level household counts aggregated from all survey sources
+- **hh_size_data.gpkg** — Spatial household size summaries with EA geometries
+
+The Quality Assurance process compares all columns in these outputs against baseline versions using an exact-match parity check. Any value differences are reported in the "Column mismatch detail" section below.
 
 ```{r qa-summary-table}
 qa_summary_raw %>%
@@ -855,26 +726,7 @@ qa_summary_raw %>%
          `Duplicate keys (current)`, `Duplicate keys (baseline)`,
          `Key drift datasets`) %>%
   kable() %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE) %>%
-  row_spec(which(qa_summary_raw$status == "PASS"), background = "#eafaf1") %>%
-  row_spec(which(qa_summary_raw$status == "FAIL"), background = "#fdedec")
-```
-
-#### Duplicate key detail
-
-```{r qa-dup-table}
-qa_dup_raw %>%
-  mutate(
-    `Key drift` = ifelse(duplicate_key_drift, "⚠ YES", "✓ No"),
-    `Current duplicates` = ifelse(current_duplicate_key_count == 0, "None",
-      paste0(current_duplicate_key_count, " (", current_duplicate_keys, ")")),
-    `Baseline duplicates` = ifelse(baseline_duplicate_key_count == 0, "None",
-      paste0(baseline_duplicate_key_count, " (see full report)"))
-  ) %>%
-  select(Dataset = dataset, `Key drift`, `Current duplicates`, `Baseline duplicates`) %>%
-  kable() %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE) %>%
-  row_spec(which(qa_dup_raw$duplicate_key_drift), background = "#fdedec")
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
 ```
 
 #### Column mismatch detail
@@ -886,8 +738,7 @@ if (nrow(qa_col_raw[qa_col_raw$mismatches > 0, ]) > 0) {
            `Total rows` = total_rows, Mismatches = mismatches,
            `% mismatch` = pct_mismatch) %>%
     kable() %>%
-    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE) %>%
-    row_spec(seq_len(nrow(qa_col_raw[qa_col_raw$mismatches > 0, ])), background = "#fdedec")
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = TRUE)
 } else {
   cat("✓ No column-level mismatches found across all compared datasets.")
 }
@@ -904,6 +755,17 @@ if (nrow(qa_col_raw[qa_col_raw$mismatches > 0, ]) > 0) {
 ## 6 — Covariates_Extraction
 
 > *Source data profile and Quality Assurance for this script are not yet implemented.*
+
+---
+
+## System and Environment Information
+
+```{r system-info, results='asis'}
+# Use sys_info passed as parameter from main.R
+params$sys_info %>%
+  kable(col.names = c("Component", "Version/Info")) %>%
+  kable_styling(bootstrap_options = c("condensed", "hover"), full_width = FALSE)
+```
 
 ---
 
