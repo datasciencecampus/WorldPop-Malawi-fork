@@ -44,7 +44,7 @@ process_census_data <- function(mphc_data, ea_shapefile, output_path) {
         summarise(across(everything(), \(x) sum(x, na.rm = TRUE))) %>%
         mutate(
             tally_age = ifelse(
-                rowSums(select(., starts_with("age_group_")), na.rm = TRUE) == mphc_total_pop,
+                rowSums(as.matrix(select(., starts_with("age_group_"))), na.rm = TRUE) == mphc_total_pop,
                 "true",
                 "false"
             )
@@ -60,7 +60,7 @@ process_census_data <- function(mphc_data, ea_shapefile, output_path) {
         summarise(mphc_hh_size2 = sum(no_persons, na.rm = T), .groups = "drop")
 
     mphc_hh_size <- full_join(mphc_hh_size2, mphc_hh_size1, by = c("unique_hh_id", "EA_CODE")) %>%
-        mutate(hh_size_total = rowSums(across(c(mphc_hh_size1, mphc_hh_size2)), na.rm = TRUE)) %>%
+        mutate(hh_size_total = rowSums(as.matrix(across(c(mphc_hh_size1, mphc_hh_size2))), na.rm = TRUE)) %>%
         drop_na(EA_CODE) %>%
         group_by(EA_CODE) %>%
         summarise(
