@@ -11,11 +11,10 @@ library(tidyverse)
 
 options(scipen = 999) # turn off scientific notation for all variables
 
-#Specify Drive Path
-drive_path <- "C:/Users/oy1r22/OneDrive - University of Southampton/Desktop/Malawi_Workshop/"
-input_path <- paste0(drive_path, "Data/Surveys/")
-output_path <- paste0(drive_path, "/Output_Data/")
-shapefile_path <- paste0(drive_path, "Data/Shapefiles/")
+#Specify paths relative to repo root
+input_path <- "Data/Surveys/"
+output_path <- "Output_Data/"
+shapefile_path <- "Data/Shapefiles/"
 
 ##################################################################################
 ##################################################################################
@@ -23,13 +22,12 @@ shapefile_path <- paste0(drive_path, "Data/Shapefiles/")
 #load data
 ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use_Corrected.shp"))
 
-#check names of variables in ea shapefile
-names(ea)
-
 #Check whether EA_CODE are duplicated (returns TRUE or FALSE)
 any(duplicated(ea$EA_CODE))
 
 # Count the total number of duplicate rows
+# TODO - there are duplicate EAs - when you look at them on the map they fall on a lake
+# Are they identical rows or do they have different hh numbers? Do they have any hh?
 sum(duplicated(ea$EA_CODE))
 
 #Extract all rows where the EA_CODE appears more than once
@@ -44,7 +42,9 @@ ea_duplicates <- ea %>%
   #tm_polygons("EA_CODE", id = "DIST_NAME")
 
 
-#Create a Pseudo Unique ID for all the EAs in the country
+#Create a Pseudo Unique ID for all the EAs in the country in "cluster_id" column
+# it creates new EA ID starting aith 000001...NNNNNN. This is to avoid issues with
+# duplicate EA code - TODO: remove duplicate EA codes instead
 ea <- ea %>%
   mutate(
     cluster_id = paste0("EA", sprintf("%06d", row_number())))
@@ -52,12 +52,15 @@ ea <- ea %>%
 #check duplicates
 any(duplicated(ea$cluster_id))
 
-#Fix corrupt geometries
+#Fix corrupt geometries - the file has topological errors - where there could be gaps 
+# between boundries, when boundaries cross etc - this smooths those errors over
 st_make_valid(ea)
 
-#Turn of geometric plane
+#Turn of geometric plane - use 2D plane rather than 3D - using the projection specified
+# in the file
 sf::sf_use_s2(FALSE)
 
+# Remove the ea_duplicates object from memory and Calls garbage collection to free up memory
 rm(ea_duplicates); gc()
 
 #####################################################################################
@@ -67,18 +70,14 @@ rm(ea_duplicates); gc()
 #Load datasets
 mphc_2018 <- read_dta(paste0(input_path, "0923_pop_modelling_data.dta"))
 
-#head 
-head(mphc_2018)
-
-#names
-names(mphc_2018)
-
 # Mutate and add a  variable called no_persons = 1 (individual record)
+# every row will have 1 because there is a person per row
 mphc_2018 <- mphc_2018 %>% 
   mutate(no_persons = 1)  # Individual observation
 
 #Create unique hh id based on the p02
 # Create a unique ID that increase every time hh_head (p02) is 1
+# Each row will have a hh id
 mphc_2018  <- mphc_2018  %>% 
   mutate(unique_hh = cumsum(p02 == 1))
 
@@ -89,12 +88,20 @@ mphc_2018  <- mphc_2018  %>%
 ##################################################################
 ##################################################################
 ### Process Points with GPS
+#TODO - Instead of just dropping records with NA in log/lat, it would be good to first group the data
+# by Unique_HH_EA_CODE and if there is a group that has at least one record with GPS coordinates, 
+# we could use that group's centroid instead of dropping all records.
+
+# It would also be useful to check how many records show different GPS coordinates within the same Unique_HH_EA_CODE
+# and if there are some that are different if they are in close proximity or not.
 
 # Filter points with gps coordinates
 mphc_with_gps <- mphc_2018 %>%  
-  drop_na(hh_longitude, hh_latitude) 
+  drop_na(hh_longitude, hh_latitude)
 
-##Get the centroid of household within cluster
+#Get the centroid of household within cluster
+# This is using all the gps locations within each Unique_HH_EA_CODE to calculate a mean
+# You end up with one row per hh (household) within each Unique_HH_EA_CODE
 mphc_with_gps <- mphc_with_gps %>%
   group_by(Unique_HH_EA_CODE) %>%
   summarise(
@@ -109,19 +116,24 @@ mphc_with_gps <- mphc_with_gps %>%
 mphc_with_gps <- mphc_with_gps %>%  
   st_as_sf(coords = c("hh_longitude", "hh_latitude"))
 
-# set the spatial reference to wgs 1984
+# set the spatial reference to wgs 1984 because the data doesn't have any
 st_crs(mphc_with_gps) <- 4326
 
-#Project the points to the EA spatial reference
+#Project the mphc data points to the EA shapefile spatial reference
 mphc_with_gps <- st_transform(mphc_with_gps, crs = st_crs(ea))
 
-#Assign each point to it nearest EA it is located within 
+#Assign each point to it nearest EA it is located within Malawi
+# If any fall outside boundary of Malawi it is assigned the nearest EA
+# k = 1 means find the 1 nearest neighbor (closest polygon for each point)
+# nngeo::st_nn() returns a list structure [[1]], so extracts the first 
+# (and only) element from that list to get the vector of indices
 nearest_indices <- st_nearest_feature(mphc_with_gps, ea)
 
 #Extract the EA_CODE  of the nearest polygons
 nearest_ids <- ea$EA_CODE[nearest_indices]
 
 # Add the EA_CODE to data
+# TODO - Match the record from nearest indecies with the mphc_with_gps records to ensure correct assignment
 mphc_with_gps$EA_CODE <- nearest_ids
 
 #Convert data to tibble
@@ -131,10 +143,11 @@ mphc_with_gps <- mphc_with_gps %>%
 
 #########################################################################
 
-# Here we are going to process record without gps first 
+# Here we are going to process record without gps
 # We are processing the data based on the Census EA_CODE
 
 # Filter records without GPS coordinates
+# TODO - instead get the records for which no one in the Unique_HH_EA_CODE has GPS coordinates
 mphc_no_gps <- mphc_2018 %>% 
   filter(is.na(hh_longitude) | is.na(hh_latitude))
 
