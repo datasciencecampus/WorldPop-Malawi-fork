@@ -15,9 +15,9 @@ library(tidyverse)  # For data manipulation
 options(scipen=999)
 
 #Specify Drive Path
-drive_path <- "C:/Users/oy1r22/OneDrive - University of Southampton/Desktop/Malawi_Workshop/"
+drive_path <- "D:/Malawi/"
 input_path <- paste0(drive_path, "Output_Data/")
-output_path <- paste0(drive_path, "Output/")
+output_path <- paste0(drive_path, "Output_Data/")
 
 #Load dataset
 Malawi_2024_data <- read.csv(paste0(input_path, "Malawi_2024_data.csv"))
@@ -317,8 +317,8 @@ summary(model3b)
 
 #Covs selection
 covs <- EA_data  %>% 
-  select(starts_with("x")) %>% 
-  select(where(~ !any(is.na(.))))  # Remove covariates with NAs
+  dplyr::select(starts_with("x")) %>% 
+  dplyr::select(where(~ !any(is.na(.))))  # Remove covariates with NAs
 
 #Compute Correlation Matrix
 cor_matrix <- cor(covs)
@@ -352,7 +352,7 @@ covs <- apply(covs, 2, stdize) %>%    #z-score
 
 #Select response variable and cbind covs
 covs_selection <- EA_data %>% 
-  select(hh_density_2024) %>% 
+  dplyr::select(hh_density_2024) %>% 
   cbind(covs) 
 
 
@@ -463,7 +463,7 @@ covs_selection1 <- covs_selection %>%
   drop_na() 
 
 #Lasso Regression
-fit1_lasso <- train(
+fit1_lasso <- caret::train(
   hh_density_2024 ~ x13 + x37 + x42 + x44 + x49 + x50 + x55 + x56 + x57 + x61 + x63,
   data = covs_selection1,
   method = "glmnet",
@@ -484,7 +484,7 @@ plot(varImp(fit1_lasso))
 
 #cbind scaled covariates for model fitting
 EA_data <- EA_data %>% 
-  select(-starts_with("x")) %>% 
+  dplyr::select(-starts_with("x")) %>% 
   cbind(covs) 
 
 
@@ -503,7 +503,7 @@ model_evaluation <- data.frame(Observed = EA_data$hh_density_2024,
 
 # compute goodness-of-fit metrics
 model_evaluation <- model_evaluation %>% 
-  mutate(residual = Predicted - Observed)
+  mutate(residual = Observed - Predicted)
 
 #Checking for model fit
 fit_metrics1 <- model_evaluation %>% 
@@ -537,7 +537,7 @@ model_evaluation <- data.frame(Observed = EA_data$hh_density_2024,
 
 # compute goodness-of-fit metrics
 model_evaluation <- model_evaluation %>% 
-  mutate(residual = Predicted - Observed)
+  mutate(residual = Observed - Predicted)
 
 #Checking for model fit
 fit_metrics2 <- model_evaluation %>% 

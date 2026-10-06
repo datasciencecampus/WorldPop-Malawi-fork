@@ -1,5 +1,5 @@
 # This script implement the growth factor approach 
-# The estimates are based off the latent posterior distribution
+# The estimates are based off the full posterior distribution
 
 #Load packages
 library(INLA)
@@ -13,18 +13,19 @@ library(kableExtra)
 library(inlabru)
 library(feather)
 library(tidyverse)
-
+library(conflicted)
+#conflicted... see code put in on Friday - except we fixed it differently, how? check that code to the orig to see what changed
 set.seed(1234) #set seed for reproducibility
 
 options(scipen = 999) # turn off scientific notation for all variables
 #options(digits = 3)
 
 #Specify Drive Path
-drive_path <- "C:/Users/oy1r22/OneDrive - University of Southampton/Desktop/Malawi_Workshop/"
+drive_path <- "D:/Malawi/"
 input_path <- paste0(drive_path, "Output_Data/")
 output_path <- paste0(drive_path, "Output_Data/Predicted_Estimates/")
 shapefile_path <- paste0(drive_path, "Data/Shapefiles/")
-pop_path <- paste0(drive_path, "Output_Data/Predicted_Estimates/")
+pop_path <- paste0(drive_path, "Output_data/Predicted_Estimates")
 
 #####################################################################################
 #####################################################################################
@@ -50,6 +51,7 @@ pop_data <- pop_data %>%
     ADM_STATUS == "Urban" ~ 2,
     ADM_STATUS == "NA" ~ 1))
 
+
 # Create a nested ids
 pop_data <- pop_data %>%
   group_by(rural_urban_id, dist_id, REG_CODE) %>%
@@ -63,13 +65,13 @@ summary(pop_data$hh_count_2018)  # There are 45 EAs without hh count for 2018
 eas_na <- pop_data %>% 
   filter(is.na(hh_count_2018))
 
-#For the purpose of this work we will replace the hh count with 0 in those EAs
-#pop_data <- pop_data %>% 
-#replace_na(list(hh_count_2018 = 1))
-
-#We will remove EAs without hh count 2018
+#For the purpose of this work we will replace the hh count with 0 in those EAs ,cg because this approach is multiplicative and if leave as 0 will not get growth, decision to be made by group
 pop_data <- pop_data %>% 
-  drop_na(hh_count_2018)
+  replace_na(list(hh_count_2018 = 1))
+
+#We will remove EAs without hh count 2018 ,cg this is 2nd option, Chisomo against this as with passage of time may have had hh development, Enoch also re x district hhs displaced as encroached restricted area, now displ to anohter area, feels other areas will find others - but may not be able to go there
+#pop_data <- pop_data %>%  #cg could even run this, as there won't be any of these now as we've put them all as 1
+#  drop_na(hh_count_2018)
 
 #Calculate the ratio between 2024 to 2018 hh count
 pop_data <- pop_data %>% 
@@ -79,7 +81,7 @@ pop_data <- pop_data %>%
 # What constant yearly multiplication factor would produce the observed 6 years increase?
 
 pop_data <- pop_data %>% 
-  mutate(growth_factor = ratio^0.16)  #2024 - 2018 = 6years ie 1/6
+  mutate(growth_factor = ratio^0.16)  #2024 - 2018 = 6years ie 1/6 ,cg to get annual growth rate
 
 #check summary stats 
 summary(pop_data$growth_factor)
@@ -94,7 +96,7 @@ EA_data <- pop_data %>%
   filter(!is.infinite(growth_factor))  #drop Infinity values
 
 #check summary stats 
-summary(EA_data$growth_factor)   #Summary of growth factor
+summary(EA_data$growth_factor)   #Summary of growth factor ,any place above 1 there has been growth, 1st quantile is 1l some have grown by > 5 times with factor 1.58
 summary(EA_data$hh_count_2024)   #Summary of 2024 hh count
 
 #Boxplot of growth_factor distribution
@@ -116,7 +118,7 @@ ggplot(data = EA_data, aes(x = growth_factor)) +
   ) +
   theme_minimal()
 
-#plot HH Count 2024
+#plot HH Count 2024 ,cg when look at growth factor dist looks more like normal than gamma as no long tail to right, therefore used lognormal as can backtransform negative values back to real data
 ggplot(data = EA_data, aes(x = hh_count_2024)) +
   geom_histogram(
     fill = "blue", 
@@ -130,7 +132,7 @@ ggplot(data = EA_data, aes(x = hh_count_2024)) +
   ) +
   theme_minimal()
 
-# Remove HH count below 10
+# Remove HH count below 10, cg from survey data any ea hh count less than 10
 EA_data <- EA_data %>% 
   filter(hh_count_2024 > 10)
 
@@ -149,7 +151,7 @@ ggplot(data = EA_data, aes(x = hh_count_2024)) +
   theme_minimal()
 
 
-#Boxplot of HH density
+#Boxplot of growth factor
 ggplot(data = EA_data, aes(y=growth_factor))+
   geom_boxplot(color="blue", alpha=0.2)
 
@@ -168,7 +170,7 @@ ggplot(data = EA_data, aes(x = growth_factor)) +
   ) +
   theme_minimal()
 
-#check summary stats 
+#check summary stats ,cg dist of final dataset to use in the model
 summary(EA_data$growth_factor)
 
 ###############################################################################
@@ -203,7 +205,7 @@ nested_group <- EA_data %>%
 
 #Specify the number of samples to draw
 
-n.samples <- 500
+n.samples <- 100 #changed from 500 just for speed
 
 
 #########################################################################
@@ -600,7 +602,7 @@ prediction_summary_2024 %>%
 #------------------------------------------------------------------------------
 predictions_2024 <- prediction_summary_2024 %>% 
   drop_na(hh_count_2024) %>% 
-  filter(hh_count_2024 > 17) %>% 
+  filter(hh_count_2024 > 10) %>% #cg change 17 to 10
   mutate(residual = hh_count_2024 - predicted_hh_count_2024)
 
 
@@ -622,7 +624,7 @@ val2_2024 %>%
 #############################################################################
 ###############################################################################
 #Model 3 - Fixed Effect + Urban_Rural_Random_Effect + Dist_Random_Effect + EA Random_Effect
-
+#cg came back to meeting, will explain through this...
 #------------------------------------------------------------------------------
 # Fit lognormal Model
 #------------------------------------------------------------------------------
@@ -671,7 +673,7 @@ mu_samples <- generate(
   num.threads = "1"
 )
 
-#Convert to dataframe
+#Convert to dataframe, cg these are the posteriors, same number 3899 as ...something...
 growth_factor_draws <- mu_samples %>% 
   as_tibble()
 
@@ -686,7 +688,7 @@ train_prediction_summary <- tibble(
   growth_factor_upper = apply(growth_factor_draws, 1,quantile,probs = 0.975)
 )
 
-# Calculate Coverage Proportions for Train Data
+# Calculate Coverage Proportions for Train Data, cg either if fall within bounds, true if falls within lower and upper, else false
 train_prediction_summary <- train_prediction_summary %>%
   mutate(
     #growth_factor
@@ -711,7 +713,7 @@ growth_factor_metrics3 <- train_prediction_summary %>%
 
 growth_factor_metrics3 %>%
   kable(digits = 3)
-
+#cg model overfitting as correlation 1 ie 100%, must have been becuase included ea something
 
 #------------------------------------------------------------------------------
 # Generate Posterior Mean growth_factor Samples for Full Data for 2024
@@ -723,18 +725,18 @@ mu_samples <- generate(
   newdata = pop_data,
   formula = ~ (Intercept + google_v2_5 +
                  Random_rural_urban_eval(rural_urban_id)+
-                 Random_dist_eval(dist_id)),
+                 Random_dist_eval(dist_id)), #cg have removed ea random effect, as was calc for all eas of obs but now making prediction for all eas in the country, now need to add a random number and exponentiate it next step
   n.samples = n.samples,
   seed = 2,
   num.threads = "1"
 )
 
-# Extract EA Precision Parameter (EA Random Effect) and convert to sd
+# Extract EA Precision Parameter (EA Random Effect) and convert to sd ,cg precision 1/var, to get stdev sqrt of 1/precision
 iid.sd <- sqrt(1 / mod3_count$summary.hyperpar["Precision for Random_EA",1])
 Random_EA_eval <- matrix(rnorm(nrow(pop_data)*n.samples, 0, iid.sd),
                          nrow = nrow(pop_data),
                          ncol = n.samples)
-
+#cg iid bit... assuming mean 0 etc see recording, takes sqrt of something higher up in code
 
 # Add Parameters values to mu_samples
 #Add random effect to data
@@ -743,7 +745,7 @@ mu_samples <- mu_samples + Random_EA_eval
 #Exponential
 mu_samples <- exp(mu_samples)
 
-#Convert to dataframe
+#Convert to dataframe ,cg posteriors for all the eas in the country, their growth factors
 growth_factor_draws <- mu_samples %>% 
   as_tibble()
 
@@ -752,7 +754,7 @@ growth_factor_draws <- mu_samples %>%
 #Where Growth factor = (Growth factor Estimates)^2024-2018 = 
 # = Growth factor estimates ^ 6
 #------------------------------------------------------------------------------
-
+#cg getting hh estimates for all eas, remembering power of 6 because it was converted to to annual, now going back to doing it for 6 years,  mult by hh for 2018, gives you posterior draws for 100 samples
 hh_draws_2024 <- growth_factor_draws %>%
   mutate(
     across(
@@ -762,7 +764,7 @@ hh_draws_2024 <- growth_factor_draws %>%
   )
 
 #------------------------------------------------------------------------------
-# Summarise Predictions for 2024
+# Summarise Predictions for 2024 ,cg summarising posterior draws and summarising coverage
 #------------------------------------------------------------------------------
 
 prediction_summary_2024 <- tibble(
@@ -816,13 +818,13 @@ prediction_summary_2024 %>%
     observed_total  = sum(hh_count_2024, na.rm = TRUE),
     predicted_total = sum(predicted_hh_count_2024, na.rm = TRUE)
   ) 
-
+obs 1052918 predicted 1091807 so slightly overestimating
 #------------------------------------------------------------------------------
 # Validate 2024 Predictions Against Observed HH Count
 #------------------------------------------------------------------------------
 predictions_2024 <- prediction_summary_2024 %>% 
   drop_na(hh_count_2024) %>% 
-  filter(hh_count_2024 > 17) %>% 
+  filter(hh_count_2024 > 10) %>% #cg changing from 17 to 10
   mutate(residual = hh_count_2024 - predicted_hh_count_2024)
 
 
@@ -839,12 +841,12 @@ val3_2024 <- predictions_2024 %>%
 
 val3_2024 %>%
   kable(digits = 3)
-
+#cg see 93% coverage but remember was overfitting with corr 100%, so won't be final model
 #############################################################################
 ##############################################################################
 #############################################################################
 # Geostatistical Model - INLA SPDE ----------------------------------------
-
+#cg this is spatial version of model
 #-Define the coordinates of centroids
 coords <- cbind(EA_data$long, EA_data$lat) 
 
@@ -854,7 +856,7 @@ summary(dist(coords)) #summarizes the Euclidean distance between points in the s
 
 #build non-convex hull mesh
 non_convex_bdry <- inla.nonconvex.hull(coords, -0.03, -0.05, resolution = c(100, 100))
-mesh <- fm_mesh_2d_inla(boundary = non_convex_bdry, max.edge=c(0.1, 1), 
+mesh <- fmesher::fm_mesh_2d(boundary = non_convex_bdry, max.edge=c(0.1, 1), 
                         offset = c(0.05, 1),
                         cutoff = 0.003)
 
@@ -871,7 +873,7 @@ spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)
 #------------------------------------------------------------------------------
 # Fit lognormal Model
 #------------------------------------------------------------------------------
-
+#cg drop ea random effect as overfitting
 formula4 <- growth_factor ~ google_v2_5 +
   Random_rural_urban(rural_urban_id, model = "iid", mapper = bru_mapper_index(n = rural_urban_group))+
   Random_dist(dist_id, model = "iid", mapper = bru_mapper_index(n = dist_groups))+
@@ -898,7 +900,7 @@ mod4_count <- bru(
 summary(mod4_count)
 
 #------------------------------------------------------------------------------
-# Predict Growth Factor
+# Predict Growth Factor, cg making preduction for the growth factor dataset
 #Generate Posterior Mean growth_factor Samples for Training Data (EA_data)
 #------------------------------------------------------------------------------
 
@@ -956,7 +958,7 @@ growth_factor_metrics4 <- train_prediction_summary %>%
 
 growth_factor_metrics4 %>%
   kable(digits = 3)
-
+#all get slightly diff results
 
 #------------------------------------------------------------------------------
 # Generate Posterior Mean growth_factor Samples for Full Data for 2024
@@ -1055,7 +1057,7 @@ prediction_summary_2024 %>%
 #------------------------------------------------------------------------------
 predictions_2024 <- prediction_summary_2024 %>% 
   drop_na(hh_count_2024) %>% 
-  filter(hh_count_2024 > 17) %>% 
+  filter(hh_count_2024 > 10) %>% #changed from 17 to 10
   mutate(residual = hh_count_2024 - predicted_hh_count_2024)
 
 
@@ -1090,10 +1092,10 @@ growth_factor_metrics %>%  kable()
 
 metrics_2024 <- rbind(val1_2024, val2_2024, val3_2024, val4_2024)
 metrics_2024 %>%  kable()
-
+#cg clear overfitting in model 3, so should disregard. therefore model 4 preferred
 #Selected predicted hh count for 2024 to be used to train 2024 and 2026 estimate
 predicted_hh_count_2024 <- prediction_summary_2024 %>% 
-  select(cluster_id, predicted_hh_count_2024)
+  dplyr::select(cluster_id, predicted_hh_count_2024) #prediction for whole country by each cluster id, going to use 2024 against 2026 to get pred hh count for 2026 as shown in slides
 
 ################## END OF GROWTH FACTOR 2018 to 2024 #########################
 ###############################################################################
@@ -1101,7 +1103,7 @@ predicted_hh_count_2024 <- prediction_summary_2024 %>%
 
 #Remove all object except the ones listed
 rm(list = setdiff(ls(), c("drive_path", "input_path", "output_path", 
-                          "shapefile_path", "pop_output", "predicted_hh_count_2024"))) 
+                          "shapefile_path", "pop_path", "predicted_hh_count_2024"))) 
 
 # Clear console
 cat("\014")
@@ -1112,12 +1114,12 @@ cat("\014")
 ############ GROWTH FACTOR 2024 to 2026 MODEL #################################################################
 ################################################################################################
 
-# Load 2024 Data
-pop_data <-  read.csv(paste0(input_path, "Malawi_2024_data.csv")) 
+# Load 2026 Data
+pop_data <-  read.csv(paste0(input_path, "Malawi_2026_data.csv")) 
 
-#Join 2024 Predictions to Data
+#Join 2026 Predictions to Data
 pop_data <- pop_data %>% 
-  inner_join(predicted_hh_count_2024, by = "cluster_id")
+  inner_join(predicted_hh_count_2024, by = "cluster_id") #2024 is the prediction just done
 
 #names
 names(pop_data)
@@ -1151,22 +1153,22 @@ pop_data <- pop_data %>%
 #Find the annual multiplicative growth factor
 # What constant yearly multiplication factor would produce the observed 2 years increase?
 
-pop_data <- pop_data %>% 
+pop_data <- pop_data %>%
   mutate(growth_factor = ratio^0.5)  #2026 - 2024 = 2years ie 1/2
 
-#check summary stats 
+#check summary stats ,cg growth factor for next period ,cg note some people had more... turns out because they decided to drop the areas with 0 census in earlier step
 summary(pop_data$growth_factor)
-
+#cg stopped for break here, and forgot to start recording again until just 10 mins before end, sorry
 ###########################################################################
 ############################################################################
 # Visualize the distribution of data and clean the data
 
-#filter growth factor which is NA
+#filter growth factor which is NA ,cg where don't have current hh figures for 2026, so can't use in model
 EA_data <- pop_data %>% 
   drop_na(growth_factor) %>%   # drop NA 
   filter(!is.infinite(growth_factor))  #drop Infinity values
 
-#check summary stats 
+#check summary stats ,cg just those with 2026 data, see the difference from all the areas? examine them compared to whole thing, doesn't seem to be a step
 summary(EA_data$growth_factor)   #Summary of growth factor
 summary(EA_data$hh_count_2026)   #Summary of 2026 hh count
 
@@ -1234,13 +1236,13 @@ nested_group <- EA_data %>%
 
 #Specify the number of samples to draw
 
-n.samples <- 500
+n.samples <- 100 #cg changed from 500
 
 #############################################################################
 ##############################################################################
 #############################################################################
 # Geostatistical Model - INLA SPDE ----------------------------------------
-
+#go strait to model 4 as the best one above, don't need to do for all of them
 #-Define the coordinates of centroids
 coords <- cbind(EA_data$long, EA_data$lat) 
 
@@ -1248,9 +1250,9 @@ coords <- cbind(EA_data$long, EA_data$lat)
 summary(dist(coords)) #summarizes the Euclidean distance between points in the spatial domain
 
 
-#build non-convex hull mesh
+#build non-convex hull mesh ,cg note had to add fmesher thing again a couple of times in this file
 non_convex_bdry <- inla.nonconvex.hull(coords, -0.03, -0.05, resolution = c(100, 100))
-mesh <- fm_mesh_2d_inla(boundary = non_convex_bdry, max.edge=c(0.1, 1), 
+mesh <- fmesher::fm_mesh_2d(boundary = non_convex_bdry, max.edge=c(0.1, 1), 
                         offset = c(0.05, 1),
                         cutoff = 0.003)
 
@@ -1357,7 +1359,7 @@ growth_factor_metrics5 %>%
 # Generate Posterior Mean growth_factor Samples for Full Data for 2026
 #------------------------------------------------------------------------------
 
-#Generate samples
+#Generate samples ,cg based on the model, generates 100 samples around mu with the required distribution?
 mu_samples <- generate(
   mod5_count,
   newdata = pop_data,
@@ -1377,7 +1379,7 @@ growth_factor_draws <- mu_samples %>%
 #------------------------------------------------------------------------------
 # Calculate 2026 Estimates = Predicted HH Count 2024 * predicted growth_factors
 #Where Growth factor = (Growth factor Estimates)^2026-2024 = 
-# = Growth factor estimates ^ 2
+# = Growth factor estimates ^ 2 ,cg so the 2026 est is 2024 est with a further 2 years of growth
 #------------------------------------------------------------------------------
 
 hh_draws_2026 <- growth_factor_draws %>%
@@ -1444,7 +1446,7 @@ prediction_summary_2026 %>%
     observed_total  = sum(hh_count_2026, na.rm = TRUE),
     predicted_total = sum(predicted_hh_count_2026, na.rm = TRUE)
   ) 
-
+#obs 179599 pred 180067
 #------------------------------------------------------------------------------
 # Validate 2026 Predictions Against Observed HH Count
 #------------------------------------------------------------------------------
@@ -1466,10 +1468,10 @@ val_2026 <- predictions_2026 %>%
 
 val_2026 %>%
   kable(digits = 3)
-
+#cg result mae 59.719, coverage 62%
 # Write Results to file
-write.csv(predictions_2026, paste0(pop_path, "Growth_Factor_Latent_Posterior.csv"), row.names = F)
-
+write.csv(predictions_2026, paste0(pop_path, "Growth_Factor_Full_Posterior.csv"), row.names = F)
+#cg work out where this writes to, as hasn't gone to right place,where is pop_path going?
 ###############################################################################
 ##############################################################################
 ##############################################################################
@@ -1507,25 +1509,25 @@ predictions_2026 <- predictions_2026 %>%
   mutate(uncertainty = (hh_upper_2026 - hh_lower_2026)/predicted_hh_count_2026,
          range = hh_upper_2026 - hh_lower_2026)
 
-#mean Uncertainty
+#mean Uncertainty ,cg gives you average uncertainty, every ea will have its own uncertainty see predictions 2026df
 mean(predictions_2026$uncertainty)
 #----------------------------------------------------------
 # Prepare data
 #----------------------------------------------------------
 
 plot_data <- predictions_2026 %>% 
-  select(hh_count_2026, predicted_hh_count_2026) %>% 
+  dplyr::select(hh_count_2026, predicted_hh_count_2026) %>% 
   pivot_longer(
     cols = everything(),
     names_to = "Variable",
     values_to = "Value"
   ) %>%
   mutate(
-    Variable = recode(Variable,
+    Variable = dplyr::recode(Variable,
                       hh_count_2026 = "Survey 2026 Data",
                       predicted_hh_count = "Predictions")
   )
-
+#cg get error here - conflicted, need to work out how to fix - just put in dplyr:: for now??
 #----------------------------------------------------------
 # Create summary statistics
 #----------------------------------------------------------
@@ -1745,7 +1747,7 @@ coverage_by_rural_urban
 
 
 rural_urban <- predictions_2026 %>% 
-  select(ADM_STATUS, hh_count_2026, hh_lower_2026, predicted_hh_count_2026, hh_upper_2026)
+  dplyr::select(ADM_STATUS, hh_count_2026, hh_lower_2026, predicted_hh_count_2026, hh_upper_2026)
 
 validation_rural_urban <- rural_urban %>% 
   group_by(ADM_STATUS) %>% 
@@ -1833,18 +1835,18 @@ ggplot(rural_urban,
 # Box plot for Rural Vs Urban ---------------------------------------------
 
 plot_data_rural_urban <- rural_urban %>% 
-  select(hh_count_2026, predicted_hh_count_2026, ADM_STATUS) %>% 
+  dplyr::select(hh_count_2026, predicted_hh_count_2026, ADM_STATUS) %>% 
   pivot_longer(
     cols = c(hh_count_2026, predicted_hh_count_2026),
     names_to = "Variable",
     values_to = "Value"
   ) %>%
   mutate(
-    Variable = recode(Variable,
+    Variable = dplyr::recode(Variable,
                       hh_count_2026 = "Survey 2026 Data",
                       predicted_hh_count = "Predictions")
   )
-
+#get error here add dplyr:: before recode
 #----------------------------------------------------------
 # Create summary statistics
 #----------------------------------------------------------
@@ -1912,14 +1914,14 @@ ggplot(plot_data_rural_urban, aes(x = Variable, y = Value, fill = ADM_STATUS)) +
 #################################################################################
 #################################################################################
 ########## DISAGREGATE 2026 PREDICTIONS TO GRIDCELL #############################
-
+#ortis to explain this more tomorrow
 #load covariates
 pred_covs <-  read_feather(paste0(input_path, "Malawi_covs_stack_2024.feather"))
 r1 <- rast(paste0(input_path, "country_raster.tif"))
 
 #Select needed variables
 pred_covs <- pred_covs %>% 
-  select(-starts_with("x"))
+  dplyr::select(-starts_with("x"))
 
 # Join 2026 Predictions to grid cells
 pred_covs_2026 <- pred_covs %>% 
@@ -1945,7 +1947,7 @@ test <- pred_covs_2026 %>%
   summarise(total_grid_estimates = sum(grid_hh_estimates_2026)) %>% 
   ungroup() %>% 
   inner_join(prediction_summary_2026, by = "cluster_id") %>% 
-  select(total_grid_estimates, predicted_hh_count_2026)
+  dplyr::select(total_grid_estimates, predicted_hh_count_2026)
 
 # test if estimates match ea totals
 all(round(test$total_grid_estimates) == round(test$predicted_hh_count_2026))  #If TRUE then it matches
@@ -1959,7 +1961,7 @@ pixel_predictions  <- st_as_sf(pred_covs_2026 , coords = c("long", "lat"))
 st_crs(pixel_predictions) <- 4326
 
 #write to file
-#st_write(pixel_predictions, paste0(output_path, "HH_Estimates_2026.gpkg"), append = T)
+st_write(pixel_predictions, paste0(output_path, "HH_Estimates_2026.gpkg"), append = T)
 
 #Rasterize predictions and export to file
 pred_raster  <- rasterize(pixel_predictions, r1, field = "grid_hh_estimates_2026")

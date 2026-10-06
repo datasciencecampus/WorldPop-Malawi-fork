@@ -15,7 +15,7 @@ library(tidyverse)
 options(scipen=999)
 
 #Specify Drive Path
-drive_path <- "C:/Users/oy1r22/OneDrive - University of Southampton/Desktop/Malawi_Workshop/"
+drive_path <- "D:/Malawi/"
 input_path <- paste0(drive_path, "Output_Data/")
 output_path <- paste0(drive_path, "Output_Data/")
 shapefile_path <- paste0(drive_path, "Data/Shapefiles/")
@@ -41,7 +41,7 @@ pop_data <- pop_data %>%
     ADM_STATUS == "Urban" ~ 2,
     ADM_STATUS == "NA" ~ 1))
 
-# Create a nested ids
+# Create a nested ids ,need to do this to do the hierarchical modelling
 pop_data <- pop_data %>%
   group_by(rural_urban_id, dist_id, REG_CODE) %>%
   mutate(nested_id = cur_group_id()) %>%
@@ -62,7 +62,7 @@ summary(EA_data$hh_density)
 #filter hh_density which is NA
 EA_data <- EA_data %>% 
   drop_na(hh_density) %>% 
-  filter(!is.infinite(hh_density))
+  dplyr::filter(!is.infinite(hh_density))
 
 #check summary stats again 
 summary(EA_data$hh_density)
@@ -94,7 +94,7 @@ ggplot(data = EA_data, aes(x = hh_density)) +
   ) +
   theme_minimal()
 
-#plot HH Count
+#plot HH Count ,this was the reason for choosing gamma dist, long tail to right
 ggplot(data = EA_data, aes(x = hh_count_2024)) +
   geom_histogram(
     fill = "blue", 
@@ -110,7 +110,7 @@ ggplot(data = EA_data, aes(x = hh_count_2024)) +
 
 # Remove HH count below 10 
 EA_data <- EA_data %>% 
-  filter(hh_count_2024 > 10)
+  dplyr::filter(hh_count_2024 > 10)
 
 #plot HH Count
 ggplot(data = EA_data, aes(x = hh_count_2024)) +
@@ -151,7 +151,7 @@ summary(EA_data$hh_density)
 
 #Density below 30
 EA_data<- EA_data %>% 
-  filter(hh_density < 30)
+  dplyr::filter(hh_density < 30)
 
 #check summary stats 
 summary(EA_data$hh_density)
@@ -193,7 +193,7 @@ ggplot(data = EA_data, aes(x = google_v2_5)) +
 
 # There are some outliers in building count. Removing bcount above 2000
 EA_data <- EA_data %>% 
-  filter(google_v2_5 < 2000)
+  dplyr::filter(google_v2_5 < 2000)
 
 #plot the distribution again and check
 # Density plot of Building Count
@@ -217,8 +217,8 @@ ggplot(data = EA_data, aes(x = google_v2_5)) +
 
 #Covs selection
 covs <- EA_data  %>% 
-  select(starts_with("x")) %>% 
-  select(where(~ !any(is.na(.))))  # Remove covariates with NAs
+  dplyr::select(starts_with("x")) %>% 
+  dplyr::select(where(~ !any(is.na(.))))  # Remove covariates with NAs
 
 #Compute Correlation Matrix
 cor_matrix <- cor(covs)
@@ -244,7 +244,7 @@ covs <- apply(covs, 2, stdize) %>%    #z-score
 
 #Select response variable and cbind covs
 covs_selection <- EA_data %>% 
-  select(hh_density) %>% 
+  dplyr::select(hh_density) %>% 
   cbind(covs) 
 
 # Stepwise Covariate Selection --------------------------------------------
@@ -301,9 +301,9 @@ final_formula <- as.formula(formula_string)
 print(final_formula)
 
 #function to drop non-significant variables
-# Start with full model
-current_formula <- as.formula("hh_density ~  x13 + x35 + x37 + x38 + x40 + x42 + 
-    x44 + x49 + x50 + x54 + x55 + x56 + x57 + x58 + x59 + x61 + 
+# Start with full model #have to replace the covariates from the results
+current_formula <- as.formula("hh_density ~  x19 + x26 + x39 + x40 + x42 + 
+    x44 + x49 + x51 + x53 + x55 + x56 + x61 + 
     x62 + x63")
 
 # Loop to drop non-significant variables
@@ -350,8 +350,8 @@ covs_selection1 <- covs_selection %>%
 
 #Lasso Regression
 fit1_lasso <- train(
-  hh_density ~ x13 + x37 + x42 + x44 + x49 + x50 + x55 + x56 + 
-    x57 + x61 + x63,
+  hh_density ~ x19 + x26 + x40 + x42 + x45 + x49 + x53 + x55 + x56 + 
+     x61 + x63,
   data = covs_selection1,
   method = "glmnet",
   metric = "RMSE",  # Choose from RMSE, RSquared, AIC, BIC, ...others?
@@ -371,11 +371,11 @@ plot(varImp(fit1_lasso))
 
 #Selected covariates for final modelling
 # Selecting covariates with importance above 10% 
-# x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 
+# x19 + x63 + x40 + x55 + x62 + x49 + x26  
 
 #select important variables from pop_data and cbind scaled covariates for model fitting
 EA_data <- EA_data %>% 
-  select(-starts_with("x")) %>% 
+  dplyr::select(-starts_with("x")) %>% 
   cbind(covs) 
 
 #Assign unique values to each row
@@ -409,7 +409,7 @@ nested_group <- EA_data %>%
 # Hence the default prior is of the form 
 # Bi ~ N (0, 31.6^2)
 
-# We want to assign our own priors
+# We want to assign our own priors ,though we are using the default priors here, those given above:0, 31.6
 #define priors
 #hyper.prec = list(theta = list(prior="pc.prec", param=c(0.01,0.01)))
 #control.fixed = list(mean=0, prec=1/1000, mean.intercept=0, prec.intercept=1/1000) 
@@ -423,7 +423,7 @@ nested_group <- EA_data %>%
 
 formula1 <- hh_density ~  Intercept(1)
 
-#fit model using a gamma distribution
+#fit model using a gamma distribution ,inlabru is a wrapper, uses inla but makes it easier to write equ, one fn to write it
 mod1_gamma <- bru(formula1,
                   data = EA_data,
                   family = "gamma", 
@@ -442,10 +442,10 @@ plot(mod1_gamma, "Intercept")
 
 
 ## Predict function gives summarized hh_density estimates
-mu <- predict(mod1_gamma, 
+mu <- inla::predict(mod1_gamma, 
               newdata = EA_data, 
               formula = ~ exp(Intercept),
-              n.samples = 500, 
+              n.samples = 500, #change to 100 to allow it to run, but keep 500 for real
               seed = 2,
               num.threads = "1" )
 mu
@@ -454,7 +454,7 @@ mu
 mu_samples <- generate (mod1_gamma, 
                         newdata = EA_data, 
                         formula = ~ exp(Intercept),
-                        n.samples = 500, 
+                        n.samples = 500, #change to 100 to allow it to run, but keep 500 for real
                         seed = 2,
                         num.threads = "1" )
 
@@ -494,7 +494,7 @@ ggplot(mu_samples, aes(x = predicted_density)) +
 # Estimate the HH Count = Predicted Density * Bcount
 hh_estimates1 <- EA_data %>% 
   cbind(mu_summary) %>% 
-  select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
+  dplyr::select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
   rename(observed_density = hh_density, 
          predicted_density = mean,
          observed_hh_count = hh_count_2024) %>% 
@@ -542,7 +542,7 @@ hh_metrics1 %>%
 
 # Model 2 - Intercept + Covariates ----------------------------------------
 
-formula2 <- hh_density ~ x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56
+formula2 <- hh_density ~ x19 + x63 + x40 + x55 + x62 + x49 + x26
 
 #formula2b <- hh_density ~ x13(main = x13, model="linear", mean.linear=0, prec.linear=0.001) +
 #x63(main = x63, model="linear", mean.linear=5, prec.linear=0.001) +
@@ -570,25 +570,25 @@ summary(mod2_gamma)
 #Plot intercept parameter
 plot(mod2_gamma, "Intercept")
 
-#Plot fixed effect parameters
-plot(mod2_gamma, "x13")
+#Plot fixed effect parameters ,only did 3, could plot all of them
+plot(mod2_gamma, "x19")
 plot(mod2_gamma, "x63")
-plot(mod2_gamma, "x50")
+plot(mod2_gamma, "x55")
 
 
 ## Predict the mean hh_density
-mu <- predict(mod2_gamma, 
+mu <- inlabru::predict(mod2_gamma, 
               newdata = EA_data, 
-              formula = ~ exp(Intercept + x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56),
-              n.samples = 500, 
+              formula = ~ exp(Intercept + x19 + x63 + x40 + x55 + x62 + x49 + x26),
+              n.samples = 500, #change to 100 to allow it to run, but keep 500 for real
               seed = 2,
               num.threads = "1" )
 
 #Using the generate function to generate posteriors
 mu_samples <- generate (mod2_gamma, 
                         newdata = EA_data, 
-                        formula = ~ exp(Intercept + x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56),
-                        n.samples = 500, 
+                        formula = ~ exp(Intercept + x19 + x63 + x40 + x55 + x62 + x49 + x26),
+                        n.samples = 500, #change to 100 to allow it to run, but keep 500 for real
                         seed = 2,
                         num.threads = "1" )
 
@@ -641,7 +641,7 @@ ggplot(mu) +
 
 # Estimate the HH Count = Predicted Density * Bcount
 hh_estimates2 <- mu %>% 
-  select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
+  dplyr::select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
   rename(observed_density = hh_density, 
          predicted_density = mean,
          observed_hh_count = hh_count_2024) %>% 
@@ -689,7 +689,7 @@ hh_metrics2 %>%
 
 # Model 3 - Intercept + Covariates + + rural_urban_Random_Effect ------------
 
-formula3 <- hh_density ~ x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+formula3 <- hh_density ~ x19 + x63 + x40 + x55 + x62 + x49 + x26 +
   Random_rural_urban(rural_urban_id, model = "iid", mapper = bru_mapper_index(n = rural_urban_group))
 
 #fit model using a gamma distribution
@@ -709,10 +709,10 @@ summary(mod3_gamma)
 #Plot intercept parameter
 plot(mod3_gamma, "Intercept")
 
-#Plot fixed effect parameters
-plot(mod3_gamma, "x13")
+#Plot fixed effect parameters #cg plots of the posteriors of the covariates
+plot(mod3_gamma, "x19")
 plot(mod3_gamma, "x63")
-plot(mod3_gamma, "x50")
+plot(mod3_gamma, "x55")
 
 #Plot Random effect parameter
 
@@ -725,11 +725,11 @@ plot(mod3_gamma$marginals.random$Random_rural_urban[[1]], type = "l",
 
 
 ## Predict the mean hh_density
-mu <- predict(mod3_gamma, 
+mu <- inlabru::predict(mod3_gamma, 
               newdata = EA_data, 
-              formula = ~ exp(Intercept + x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+              formula = ~ exp(Intercept + x19 + x63 + x40 + x55 + x62 + x49 + x26 +
                                 Random_rural_urban_eval(rural_urban_id)),
-              n.samples = 500, 
+              n.samples = 500, #change to 100 to allow it to run, but keep 500 for real
               seed = 2,
               num.threads = "1" )
 
@@ -761,7 +761,7 @@ ggplot(mu) +
 
 # Estimate the HH Count = Predicted Density * Bcount
 hh_estimates3 <- mu %>% 
-  select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
+  dplyr::select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
   rename(observed_density = hh_density, 
          predicted_density = mean,
          observed_hh_count = hh_count_2024) %>% 
@@ -810,7 +810,7 @@ hh_metrics3 %>%
 
 # Model 4 - Intercept + Covariates + rural_urban_id_Random_Effect + Dist_Random_Effect
 
-formula4 <- hh_density ~ x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+formula4 <- hh_density ~ x19 + x63 + x40 + x55 + x62 + x49 + x26 +
   Random_rural_urban(rural_urban_id, model = "iid", mapper = bru_mapper_index(n = rural_urban_group))+
   Random_dist(dist_id, model = "iid", mapper = bru_mapper_index(n = dist_groups))
 
@@ -831,12 +831,12 @@ summary(mod4_gamma)
 
 
 ## Predict the mean hh_density
-mu <- predict(mod4_gamma, 
+mu <- inlabru::predict(mod4_gamma, 
               newdata = EA_data, 
-              formula = ~ exp(Intercept + x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+              formula = ~ exp(Intercept + x19 + x63 + x40 + x55 + x62 + x49 + x26 +
                                 Random_rural_urban_eval(rural_urban_id)+
                                 Random_dist_eval(dist_id)),
-              n.samples = 500, 
+              n.samples = 500, #change to 100 to allow it to run, but keep 500 for real
               seed = 2,
               num.threads = "1" )
 
@@ -864,7 +864,7 @@ ggplot(mu) +
 
 # Estimate the HH Count = Predicted Density * Bcount
 hh_estimates4 <- mu %>% 
-  select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
+  dplyr::select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
   rename(observed_density = hh_density, 
          predicted_density = mean,
          observed_hh_count = hh_count_2024) %>% 
@@ -913,7 +913,7 @@ hh_metrics4 %>%
 
 # Model 5 - Intercept + Covariates + Nested_Effect
 
-formula5 <- hh_density ~ x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+formula5 <- hh_density ~ x19 + x63 + x40 + x55 + x62 + x49 + x26 +
   Random_nested(nested_id, model = "iid", mapper = bru_mapper_index(n = nested_group))
 
 
@@ -934,11 +934,11 @@ summary(mod5_gamma)
 mod5_gamma$summary.random$Random_nested
 
 ## Predict the mean hh_density
-mu <- predict(mod5_gamma, 
+mu <- inlabru::predict(mod5_gamma, 
               newdata = EA_data, 
-              formula = ~ exp(Intercept + x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+              formula = ~ exp(Intercept + x19 + x63 + x40 + x55 + x62 + x49 + x26 +
                                 Random_nested_eval(nested_id)),
-              n.samples = 500, 
+              n.samples = 500, #change to 100 to allow it to run, but keep 500 for real
               seed = 2,
               num.threads = "1" )
 
@@ -966,7 +966,7 @@ ggplot(mu) +
 
 # Estimate the HH Count = Predicted Density * Bcount
 hh_estimates5 <- mu %>% 
-  select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
+  dplyr::select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
   rename(observed_density = hh_density, 
          predicted_density = mean,
          observed_hh_count = hh_count_2024) %>% 
@@ -1014,7 +1014,7 @@ hh_metrics5 %>%
 
 # Model 6 - Intercept + Covariates + Urban_Rural_Random_Effect + Dist_Random_Effect + EA Random_Effect
 
-formula6 <- hh_density ~ x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+formula6 <- hh_density ~ x19 + x63 + x40 + x55 + x62 + x49 + x26 +
   Random_rural_urban(rural_urban_id, model = "iid",  mapper = bru_mapper_index(n = rural_urban_group))+
   Random_dist(dist_id, model = "iid", mapper = bru_mapper_index(n = dist_groups))+
   Random_EA(id, model = "iid", mapper = bru_mapper_index(n = ea_groups))
@@ -1037,13 +1037,13 @@ summary(mod6_gamma)
 mod6_gamma$summary.random$Random_EA
 
 ## Predict the mean hh_density
-mu <- predict(mod6_gamma, 
+mu <- inlabru::predict(mod6_gamma, 
               newdata = EA_data, 
-              formula = ~ exp(Intercept + x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+              formula = ~ exp(Intercept + x19 + x63 + x40 + x55 + x62 + x49 + x26 +
                                 Random_rural_urban_eval(rural_urban_id)+
                                 Random_EA_eval(id)+
                                 Random_dist_eval(dist_id)),
-              n.samples = 500, 
+              n.samples = 500, #change to 100 to allow it to run, but keep 500 for real
               seed = 2,
               num.threads = "1" )
 
@@ -1071,7 +1071,7 @@ ggplot(mu) +
 
 # Estimate the HH Count = Predicted Density * Bcount
 hh_estimates6 <- mu %>% 
-  select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
+  dplyr::select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
   rename(observed_density = hh_density, 
          predicted_density = mean,
          observed_hh_count = hh_count_2024) %>% 
@@ -1166,10 +1166,10 @@ coords <- cbind(EA_data$long, EA_data$lat)
 #measure distance between coordinates
 summary(dist(coords)) #summarizes the Euclidean distance between points in the spatial domain
 
-
 #build non-convex hull mesh
 non_convex_bdry <- fmesher::fm_nonconvex_hull(coords, -0.03, -0.05, resolution = c(100, 100))
-mesh <- fm_mesh_2d_inla(boundary = non_convex_bdry, max.edge=c(0.1, 1), #0.1, 1
+#plot(non_convex_bdry)
+mesh <- fmesher::fm_mesh_2d(boundary = non_convex_bdry, max.edge=c(0.1, 1), #0.1, 1
                         offset = c(0.05, 1),
                         cutoff = 0.003)
 
@@ -1184,7 +1184,7 @@ mesh$n
 spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)
 
 #specify the spatial model 
-formula7 <- hh_density ~ x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+formula7 <- hh_density ~ x19 + x63 + x40 + x55 + x62 + x49 + x26 +
   Random_rural_urban(rural_urban_id, model = "iid", mapper = bru_mapper_index(n = rural_urban_group))+
   Random_dist(dist_id, model = "iid", mapper = bru_mapper_index(n = dist_groups))+
   Random_EA(id, model = "iid",  mapper = bru_mapper_index(n = ea_groups))+
@@ -1207,14 +1207,14 @@ summary(mod7_gamma)
 
 
 ## Predict the mean hh_density
-mu <- predict(mod7_gamma, 
+mu <- inlabru::predict(mod7_gamma, 
               newdata = EA_data, 
-              formula = ~ exp(Intercept + x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+              formula = ~ exp(Intercept + x19 + x63 + x40 + x55 + x62 + x49 + x26 +
                                 Random_rural_urban_eval(rural_urban_id)+
                                 Random_dist_eval(dist_id)+
                                 Random_EA_eval(id)+
                                 Random_Spat_eval(cbind(long, lat))),
-                              n.samples = 500, 
+                              n.samples = 500, #change to 100 to allow it to run, but keep 500 for real
                               seed = 2,
                               num.threads = "1" )
 
@@ -1242,7 +1242,7 @@ ggplot(mu) +
 
 # Estimate the HH Count = Predicted Density * Bcount
 hh_estimates7 <- mu %>% 
-  select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
+  dplyr::select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
   rename(observed_density = hh_density, 
          predicted_density = mean,
          observed_hh_count = hh_count_2024) %>% 
@@ -1375,7 +1375,7 @@ kfold_cv <- function(data, k, n.samples, seed = 123) {
     
     #build non-convex hull mesh
     non_convex_bdry <- fmesher::fm_nonconvex_hull(coords, -0.03, -0.05, resolution = c(100, 100))
-    mesh <- fm_mesh_2d_inla(boundary = non_convex_bdry, max.edge=c(0.1, 1), 
+    mesh <- fmesher::fm_mesh_2d(boundary = non_convex_bdry, max.edge=c(0.1, 1), 
                             offset = c(0.05, 1),
                             cutoff = 0.003)
     
@@ -1383,7 +1383,7 @@ kfold_cv <- function(data, k, n.samples, seed = 123) {
     spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)
     
     #Model formula
-    xval_formula <- hh_density ~  x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+    xval_formula <- hh_density ~  x19 + x63 + x40 + x55 + x62 + x49 + x26 +
       Random_rural_urban(rural_urban_id, model = "iid", mapper = bru_mapper_index(n = rural_urban_group))+
       Random_dist(dist_id, model = "iid", mapper = bru_mapper_index(n = dist_groups))+
       Random_EA(id, model = "iid",  mapper = bru_mapper_index(n = ea_groups))+
@@ -1403,7 +1403,7 @@ kfold_cv <- function(data, k, n.samples, seed = 123) {
     #Make Predictions for train data
     train_predictions <- predict(mod_xval, 
                                  newdata = train_data, 
-                                 formula = ~ exp(Intercept + x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+                                 formula = ~ exp(Intercept + x19 + x63 + x40 + x55 + x62 + x49 + x26 +
                                                    Random_rural_urban_eval(rural_urban_id)+
                                                    Random_dist_eval(dist_id)+
                                                    Random_EA_eval(id)+
@@ -1414,7 +1414,7 @@ kfold_cv <- function(data, k, n.samples, seed = 123) {
     
     # Estimate the HH Count = Predicted Density * Bcount
     train_predictions <- train_predictions %>% 
-      select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
+      dplyr::select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
       rename(observed_density = hh_density, 
              predicted_density = mean,
              observed_hh_count = hh_count_2024) %>% 
@@ -1438,7 +1438,7 @@ kfold_cv <- function(data, k, n.samples, seed = 123) {
     #Make Predictions for test data
     test_predictions <- predict(mod_xval, 
                                 newdata = test_data, 
-                                formula = ~ exp(Intercept + x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+                                formula = ~ exp(Intercept + x19 + x63 + x40 + x55 + x62 + x49 + x26 +
                                                   Random_rural_urban_eval(rural_urban_id)+
                                                   Random_dist_eval(dist_id)+
                                                   Random_Spat_eval(cbind(long, lat))),
@@ -1448,7 +1448,7 @@ kfold_cv <- function(data, k, n.samples, seed = 123) {
     
     # Estimate the HH Count = Predicted Density * Bcount
     test_predictions <- test_predictions %>% 
-      select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
+      dplyr::select(hh_density, mean, google_v2_5, hh_count_2024) %>% 
       rename(observed_density = hh_density, 
              predicted_density = mean,
              observed_hh_count = hh_count_2024) %>% 
@@ -1500,7 +1500,7 @@ kfold_cv <- function(data, k, n.samples, seed = 123) {
 # Apply function
 result1 <- kfold_cv(data = EA_data, 
                  k = 10, 
-                 n.samples = 500)
+                 n.samples = 500)#change to 100 to allow it to run, but keep 500 for real
 
 #Train data results
 result1$train_metrics %>%
@@ -1588,7 +1588,7 @@ lgocv <- function(data, k, n.samples, seed = 123) {
     
     #build non-convex hull mesh
     non_convex_bdry <- inla.nonconvex.hull(coords, -0.03, -0.05, resolution = c(100, 100))
-    mesh <- fm_mesh_2d_inla(boundary = non_convex_bdry, max.edge=c(0.1, 1), 
+    mesh <- fmesher::fm_mesh_2d(boundary = non_convex_bdry, max.edge=c(0.1, 1), 
                             offset = c(0.05, 1),
                             cutoff = 0.003)
     
@@ -1596,7 +1596,7 @@ lgocv <- function(data, k, n.samples, seed = 123) {
     spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)
     
     #Model formula
-    xval_formula <- observed_data ~  x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+    xval_formula <- observed_data ~  x19 + x63 + x40 + x55 + x62 + x49 + x26 +
       Random_rural_urban(rural_urban_id, model = "iid", mapper = bru_mapper_index(n = rural_urban_group))+
       Random_dist(dist_id, model = "iid", mapper = bru_mapper_index(n = dist_groups))+
       Random_EA(id, model = "iid",  mapper = bru_mapper_index(n = ea_groups))+
@@ -1625,7 +1625,7 @@ lgocv <- function(data, k, n.samples, seed = 123) {
     
     # Estimate the HH Count = Predicted Density * Bcount
     train_predictions <- predictions %>% 
-      filter(dataset == "train") %>%
+      dplyr::filter(dataset == "train") %>%
       mutate(predicted_density = exp(mean),
              predicted_hh_count = predicted_density * google_v2_5) %>% 
       rename(observed_hh_count = hh_count_2024, observed_density = hh_density) 
@@ -1647,7 +1647,7 @@ lgocv <- function(data, k, n.samples, seed = 123) {
     
     # Estimate the HH Count = Predicted Density * Bcount
     test_predictions <- predictions %>% 
-      filter(dataset == "test") %>%
+      dplyr::filter(dataset == "test") %>%
       mutate(predicted_density = exp(mean),
              predicted_hh_count = predicted_density * google_v2_5) %>% 
       rename(observed_hh_count = hh_count_2024, observed_density = hh_density) 
@@ -1699,7 +1699,7 @@ lgocv <- function(data, k, n.samples, seed = 123) {
 # Apply function
 result2 <- lgocv(data = EA_data, 
                  k = 10, 
-                 n.samples = 500)
+                 n.samples = 500)#change to 100 to allow it to run, but keep 500 for real
 
 #Train data results
 result2$train_metrics %>%
@@ -1722,7 +1722,7 @@ r1 <- rast(paste0(input_path, "country_raster.tif"))
 #Remove pixels with dist ids of 33 and NA
 pred_covs <- pred_covs %>%
   drop_na(dist_id) %>%
-  filter(dist_id != 33)
+  dplyr::filter(dist_id != 33)
 
 # Check for NAs in covariates ---------------------------------------------
 
@@ -1743,7 +1743,7 @@ count_nas(pred_covs)
 
 #--Standardize covariates
 vars <- pred_covs %>%
-  select(starts_with("x"))%>%
+  dplyr::select(starts_with("x"))%>%
   names()
 
 #Scale covariates
@@ -1770,8 +1770,8 @@ pred_covs <- pred_covs %>%
 #Use the generate function to make predictions
 mu <- generate (mod2_gamma, 
                 newdata = pred_covs, 
-                formula = ~ exp(Intercept + x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56),
-                n.samples = 500, 
+                formula = ~ exp(Intercept + x19 + x63 + x40 + x55 + x62 + x49 + x26),
+                n.samples = 100, #change back to 500 when do for real
                 seed = 2,
                 num.threads = "1" )
 
@@ -1786,7 +1786,7 @@ predicted_density <- predicted_density %>%
 #Estimate Predicted Total HH
 predicted_hh_count2 <- predicted_density %>%
   mutate_at(vars(starts_with("v")), ~ . * bcount) %>%
-  select(-bcount)
+  dplyr::select(-bcount)
 
 #Total Predicted Total HH and Uncertainty
 
@@ -1802,7 +1802,7 @@ hh_model2 %>% kable()
 # District Estimates ---------------------------------------------
 
 district_names <- pred_covs %>%
-  select(DIST_NAME)
+  dplyr::select(DIST_NAME)
 
 #cbind district to data
 district_estimates <- cbind(predicted_hh_count2, district_names) %>%
@@ -1826,7 +1826,7 @@ for(dd in 1:length(district_estimates)){
   
   
   df <- df %>%
-    select(starts_with("v")) %>%
+    dplyr::select(starts_with("v")) %>%
     apply(2, sum, na.rm = T)  
   
   OUT[[dd]] <- c(district_names = typro, mean = mean(df),
@@ -1853,7 +1853,7 @@ district_hh_count <- AA %>%
 # EA Estimates --------------------------------------------------
 
 ea_names <- pred_covs %>% 
-  select(EA_CODE, ea_id)
+  dplyr::select(EA_CODE, ea_id)
 
 #cbind to data
 ea_names <- cbind(predicted_hh_count2, ea_names) %>% 
@@ -1876,7 +1876,7 @@ for(dd in 1:length(ea_estimates)){
   
   
   df <- df %>% 
-    select(starts_with("v")) %>% 
+    dplyr::select(starts_with("v")) %>% 
     apply(2, sum, na.rm = T)  
   
   OUT[[dd]] <- c(ea_names = typro, mean = mean(df),
@@ -1947,9 +1947,9 @@ summary(pixel_predictions2$hh_density)
 #Use the generate function to make predictions
 mu <- generate(mod3_gamma, 
               newdata = pred_covs, 
-              formula = ~ exp(Intercept + x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+              formula = ~ exp(Intercept + x19 + x63 + x40 + x55 + x62 + x49 + x26 +
                                 Random_rural_urban_eval(rural_urban_id)),
-              n.samples = 500, 
+              n.samples = 100, #change back 500 for real
               seed = 2,
               num.threads = "1" )
 
@@ -2129,10 +2129,10 @@ summary(pixel_predictions3$hh_density)
 #Use the generate function to make predictions
 mu <- generate(mod4_gamma, 
               newdata = pred_covs, 
-              formula = ~ exp(Intercept + x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+              formula = ~ exp(Intercept + x19 + x63 + x40 + x55 + x62 + x49 + x26 +
                                 Random_rural_urban_eval(rural_urban_id)+
                                 Random_dist_eval(dist_id)),
-              n.samples = 500, 
+              n.samples = 100, 
               seed = 2,
               num.threads = "1" )
 
@@ -2311,9 +2311,9 @@ summary(pixel_predictions4$hh_density)
 #Use the generate function to make predictions
 mu <- generate(mod5_gamma, 
               newdata = pred_covs, 
-              formula = ~ exp(Intercept + x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+              formula = ~ exp(Intercept + x19 + x63 + x40 + x55 + x62 + x49 + x26 +
                                 Random_nested_eval(nested_id)),
-              n.samples = 500, 
+              n.samples = 100, 
               seed = 2,
               num.threads = "1" )
 
@@ -2489,14 +2489,14 @@ summary(pixel_predictions5$hh_density)
 
 #Use the generate function to make predictions
 mu <- generate(mod6_gamma, newdata = pred_covs, formula = ~ Intercept +
-                 x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 + 
+                 x19 + x63 + x40 + x55 + x62 + x49 + x26 + 
                  Random_rural_urban_eval(rural_urban_id)+
                  Random_dist_eval(dist_id), 
-               n.samples = 500, 
+               n.samples = 100, 
                seed = 2,
                num.threads = "1" )
 
-#Get iid random effect for EA id
+#Get iid random effect for EA id ,this is how you add the random effect for ea
 n.samples = 500
 
 iid.sd <- sqrt(1 / mod6_gamma$summary.hyperpar["Precision for Random_EA",1])
@@ -2504,10 +2504,10 @@ Random_EA_eval <- matrix(rnorm(nrow(pred_covs)*n.samples, 0, iid.sd),
                          nrow = nrow(pred_covs),
                          ncol = n.samples)
 
-#Add random effect to data
+#Add random effect to data ,do prev 2 things and add the effects together
 mu <- mu + Random_EA_eval
 
-#Predicted Density
+#Predicted Density ,then do the exponent on the sum of them
 predicted_density <- exp(mu) %>%
   as_tibble()
 
@@ -2672,20 +2672,20 @@ summary(pixel_predictions6$hh_density)
 ##############################################################################
 ###############################################################################
 # # Model 7 - Intercept + Covariates + rural_urban_Random_Effect + 
-              # Dist_Random_Effect+ Spatial Effect
+              # Dist_Random_Effect+ Spatial Effect ,+ EA random effect
 
 #Use the generate function to make predictions
 mu <- generate(mod7_gamma, 
               newdata = pred_covs, 
-              formula = ~ (Intercept + x13 + x63 + x50 + x44 + x49 + x57 + x55 + x56 +
+              formula = ~ (Intercept + x19 + x63 + x40 + x55 + x62 + x49 + x26 +
                                 Random_rural_urban_eval(rural_urban_id)+
                                 Random_dist_eval(dist_id)+
                                 Random_Spat_eval(cbind(long, lat))),
-              n.samples = 500, 
+              n.samples = 100, 
               seed = 2,
               num.threads = "1" )
 
-#Get iid random effect for EA id
+#Get iid random effect for EA id ,adds ea random effect
 n.samples = 500
 
 iid.sd <- sqrt(1 / mod7_gamma$summary.hyperpar["Precision for Random_EA",1])

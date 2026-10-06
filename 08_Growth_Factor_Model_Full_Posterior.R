@@ -20,11 +20,10 @@ options(scipen = 999) # turn off scientific notation for all variables
 #options(digits = 3)
 
 #Specify Drive Path
-drive_path <- "C:/Users/oy1r22/OneDrive - University of Southampton/Desktop/Malawi_Workshop/"
+drive_path <- "D:/Malawi/"
 input_path <- paste0(drive_path, "Output_Data/")
 output_path <- paste0(drive_path, "Output_Data/Predicted_Estimates/")
 shapefile_path <- paste0(drive_path, "Data/Shapefiles/")
-pop_path <- paste0(drive_path, "Output_Data/Predicted_Estimates/")
 
 #####################################################################################
 #####################################################################################
@@ -1153,7 +1152,7 @@ metrics_2024 %>%  kable()
 
 #Selected predicted hh count for 2024 to be used to train 2024 and 2026 estimate
 predicted_hh_count_2024 <- prediction_summary_2024 %>% 
-  select(cluster_id, predicted_hh_count_2024)
+  dplyr::select(cluster_id, predicted_hh_count_2024)
 
 ################## END OF GROWTH FACTOR 2018 to 2024 #########################
 ###############################################################################
@@ -1544,7 +1543,7 @@ val_2026 %>%
   kable(digits = 3)
 
 # Write Results to file
-write.csv(predictions_2026, paste0(pop_path, "Growth_Factor_Full_Posterior.csv"), row.names = F)
+#write.csv(predictions_2026, paste0(pop_path, "Growth_Factor_Full_Posterior.csv"), row.names = F)
 
 ###############################################################################
 ##############################################################################
@@ -1590,7 +1589,7 @@ mean(predictions_2026$uncertainty)
 #----------------------------------------------------------
 
 plot_data <- predictions_2026 %>% 
-  select(hh_count_2026, predicted_hh_count_2026) %>% 
+  dplyr::select(hh_count_2026, predicted_hh_count_2026) %>% 
   pivot_longer(
     cols = everything(),
     names_to = "Variable",
@@ -1821,7 +1820,7 @@ coverage_by_rural_urban
 
 
 rural_urban <- predictions_2026 %>% 
-  select(ADM_STATUS, hh_count_2026, hh_lower_2026, predicted_hh_count_2026, hh_upper_2026)
+  dplyr::select(ADM_STATUS, hh_count_2026, hh_lower_2026, predicted_hh_count_2026, hh_upper_2026)
 
 validation_rural_urban <- rural_urban %>% 
   group_by(ADM_STATUS) %>% 
@@ -1909,7 +1908,7 @@ ggplot(rural_urban,
 # Box plot for Rural Vs Urban ---------------------------------------------
 
 plot_data_rural_urban <- rural_urban %>% 
-  select(hh_count_2026, predicted_hh_count_2026, ADM_STATUS) %>% 
+  dplyr::select(hh_count_2026, predicted_hh_count_2026, ADM_STATUS) %>% 
   pivot_longer(
     cols = c(hh_count_2026, predicted_hh_count_2026),
     names_to = "Variable",
@@ -1995,7 +1994,7 @@ r1 <- rast(paste0(input_path, "country_raster.tif"))
 
 #Select needed variables
 pred_covs <- pred_covs %>% 
-  select(-starts_with("x"))
+  dplyr::select(-starts_with("x"))
 
 # Join 2026 Predictions to grid cells
 pred_covs_2026 <- pred_covs %>% 
@@ -2021,7 +2020,7 @@ test <- pred_covs_2026 %>%
   summarise(total_grid_estimates = sum(grid_hh_estimates_2026)) %>% 
   ungroup() %>% 
   inner_join(prediction_summary_2026, by = "cluster_id") %>% 
-  select(total_grid_estimates, predicted_hh_count_2026)
+  dplyr::select(total_grid_estimates, predicted_hh_count_2026)
 
 # test if estimates match ea totals
 all(round(test$total_grid_estimates) == round(test$predicted_hh_count_2026))  #If TRUE then it matches
@@ -2043,7 +2042,7 @@ plot(pred_raster)
 
 #export
 writeRaster(pred_raster,  
-            paste0(output_path, "Full_Posterior_HH_Estimates_2026.tif"), 
+            paste0(output_path, "HH_Estimates_2026.tif"), 
             overwrite=TRUE, names="HH_Count")
 
 ##################END OF SCRIPT #############################################

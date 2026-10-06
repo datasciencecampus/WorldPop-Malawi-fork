@@ -6,8 +6,9 @@ library(exactextractr)
 library(tictoc)
 library(raster)
 
+
 #Specify Drive Path
-drive_path <- "C:/Users/baizaa/Office for National Statistics/H_drive_backup/CDS-AI projects/MalawiWorlPop census/September 26 workshop/Workshop_Script/"
+drive_path <- "D:Malawi/"
 output_path <- paste0(drive_path, "Output_Data/")
 shapefile_path <-  paste0(drive_path, "Data/Shapefiles/")
 bcount_path_2018 <- paste0(drive_path, "Data/Covariates/Buildings_2018/")
@@ -18,19 +19,17 @@ bcount <- rast(file.path(bcount_path_2018, "MOS_MLW_buildings_count_BCB_gl_100m_
 country <- st_read(file.path(shapefile_path, "Country_Shapefile.shp"))
 
 
-# create unique id for each ea - this is what will be rasterized
+# create unique id for each ea 
 ea <- ea %>% 
   rowid_to_column("ea_id")
 
-#create unique id for each district - it groups the eas per district and hen it will give
-# ids to the districts
+#create unique id for each district
 ea <- ea %>%  
   group_by(DIST_NAME) %>% 
   mutate(dist_id = cur_group_id()) %>% 
   ungroup() 
 
-#Create id for rural urban - this is a character which needs to be a number to be rasterised
-# Lake Malawi had NAso he's calling it rural
+#Create id for rural urban
 ea <- ea %>%  
   mutate(rural_urban_id = case_when(
     ADM_STATUS == "Rural" ~ 1,
@@ -40,7 +39,7 @@ ea <- ea %>%
 ############################################################################
 # Rasterize Country ------------------------------------------------------
 
-#Transform Raster - first the polygon needs to be projected
+#Transform Raster
 country <- st_transform(country, crs = st_crs(bcount))
 
 #Rasterize

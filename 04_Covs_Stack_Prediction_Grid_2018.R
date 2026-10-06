@@ -1,6 +1,7 @@
 
 #Load packages
 
+
 library(tidyverse)
 library(terra)
 library(tictoc)
@@ -8,14 +9,14 @@ library(feather)
 library(sf)
 
 #Specify Drive Path
-drive_path <- "C:/Users/baizaa/Office for National Statistics/H_drive_backup/CDS-AI projects/MalawiWorlPop census/September 26 workshop/Workshop_Script/"
+drive_path <- "D:/Malawi/"
 covs_path_2018 <- paste0(drive_path, "Data/Covariates/Covariates_2018/")
 output_path <- paste0(drive_path, "Output_Data/")
 input_path <- paste0(drive_path, "Output_Data/")
 shapefile_path <-  paste0(drive_path, "Data/Shapefiles/")
 bcount_path_2018 <- paste0(drive_path, "Data/Covariates/Buildings_2018/")
 
-#load rasters - you use the google because it has higher building counts
+#load rasters
 google_v2_5 <- rast(paste0(bcount_path_2018, "MOS_MLW_buildings_count_2018_glv2_5_t0_5_C_100m_v1.tif"))
 rural_urban <- rast(file.path(input_path, "rural_urban_raster.tif"))
 country <- rast(file.path(input_path, "country_raster.tif"))
@@ -26,7 +27,7 @@ microsoft <- rast(paste0(bcount_path_2018, "MOS_MLW_buildings_count_BCB_ms_100m_
 google_BCB <- rast(paste0(bcount_path_2018, "MOS_MLW_buildings_count_BCB_gl_100m_v1_1.tif"))
 PIB_total_area_google <- rast(paste0(bcount_path_2018, "MOS_MLW_buildings_total_area_PIB_gl_100m_v1_1.tif"))
 
-#Put rasters into a list - and rename
+#Put rasters into a list
 bcount_list <- list(
   country_id = country,
   ea_id = ea,
@@ -37,7 +38,7 @@ bcount_list <- list(
   google_BCB = google_BCB,
   PIB_total_area_google = PIB_total_area_google
 )
-#remove raster files from memory - because they are part of the list
+#remove raster files from memory
 rm(microsoft, ea, district, region, rural_urban,
    google_BCB, PIB_total_area_google, country); gc()
 
@@ -52,9 +53,7 @@ batch_size <- 4
 
 tic()
 
-# Loop through covariates in batches:
-# It stacks rasters by batch_size and then removes any rows that don't have google 
-# building counts. This is to reduce dimentionally of the rasters
+# Loop through covariates in batches
 for (i in seq(1, length(bcount_list), batch_size)) {
   batch_covs <- bcount_list[i:min(i + batch_size - 1, length(bcount_list))]
   
@@ -64,11 +63,10 @@ for (i in seq(1, length(bcount_list), batch_size)) {
   # Get raster values
   covs_raster_values <- terra::values(bcount_raster, dataframe = TRUE)
   
-  #Write only settled pixels to file - only pixels that have building counts in 
-  #the google_v2_5 raster
+  #Write only settled pixels to file
   covs_raster_values <- covs_raster_values %>%  
     cbind(google_v2_5) %>%  
-    filter(!is.na(buildings_count_2018_glv2_5_t0_5_C_100m_v1)) %>%  
+    dplyr::filter(!is.na(buildings_count_2018_glv2_5_t0_5_C_100m_v1)) %>%  
     dplyr::select(-buildings_count_2018_glv2_5_t0_5_C_100m_v1)
   
   # Write processed covariate values to a feather file
@@ -110,12 +108,11 @@ process_rasters_list <- list.files(path = covs_path_2018, pattern = ".tif$", ful
 process_rasters_list
 
 # Define batch size
-batch_size <- 2
+batch_size <- 10
 
 tic()
 
-# Loop through covariates in batches - it does the same for the covariates as it did 
-# for the building counts - removing rows that don't have a building count in the google_v2_5 raster
+# Loop through covariates in batches
 for (i in seq(1, length(process_rasters_list), batch_size)) {
   batch_covs <- process_rasters_list[i:min(i + batch_size - 1, length(process_rasters_list))]
   
@@ -128,7 +125,7 @@ for (i in seq(1, length(process_rasters_list), batch_size)) {
   #Write only settled pixels to file
   covs_raster_values <- covs_raster_values %>%  
     cbind(google_v2_5) %>%  
-    filter(!is.na(buildings_count_2018_glv2_5_t0_5_C_100m_v1)) %>%  
+    dplyr::filter(!is.na(buildings_count_2018_glv2_5_t0_5_C_100m_v1)) %>%  
     dplyr::select(-buildings_count_2018_glv2_5_t0_5_C_100m_v1)
   
   # Write processed covariate values to a feather file
@@ -182,7 +179,7 @@ names(raster_values) <- sapply(names(raster_values), function(name) {
 #Read raster and get xy values
 google_v2_5 <- rast(paste0(bcount_path_2018, "MOS_MLW_buildings_count_2018_glv2_5_t0_5_C_100m_v1.tif"))
 
-#Get building count values
+#Get values
 bcount_values <- terra::values(google_v2_5, dataframe = TRUE)
 
 # Get the xy coordinate of the centroid of each pixel as a dataframe
@@ -193,7 +190,7 @@ stack_coord <- cbind(bcount_values, coord)
 
 rm(bcount_values, coord); gc()
 
-#filter out unsettled pixels - ones that don't have a building count in the google_v2_5 raster
+#dplyr::filter out unsettled pixels
 stack_coord <- stack_coord %>%  
   drop_na(buildings_count_2018_glv2_5_t0_5_C_100m_v1) %>% 
   rename(google_v2_5 = buildings_count_2018_glv2_5_t0_5_C_100m_v1)
@@ -202,15 +199,14 @@ stack_coord <- stack_coord %>%
 prediction_covs <- cbind(stack_values, stack_coord, raster_values)
 
 #drop NA in country (These pixels are outside the study extent)
-# pixels could fall within the 10km boundary, so here we are removing any pixels that
-# are not within Malawi
 prediction_covs <- prediction_covs %>% 
   drop_na(country_id)
 
+
+
 ###########################################################################
 ###########################################################################
-## Add Shapefile variables - so that you can have the character names for the 
-# districts/urban/rural/etc instead of the id that were created in the rasterization
+## Add Shapefile variables
 
 #Read EA shapefiles and join to data
 ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use_Corrected.shp"))
@@ -232,7 +228,7 @@ district <- ea %>%
   dplyr::select(dist_id, DIST_NAME) %>% 
   distinct()
 
-#get region CODE
+#get REG CODE
 region <- ea %>% 
   drop_na(REG_NAME) %>% 
   distinct(REG_CODE, REG_NAME)
@@ -255,7 +251,7 @@ prediction_covs1 <- prediction_covs %>%
   left_join(rural_urban, by = "rural_urban_id")
 
 
-#Rename variables and order columns
+#Rename variables
 prediction_covs1 <- prediction_covs1 %>%  
   rename(long = x, lat = y) %>%  
   dplyr::select(EA_CODE, cluster_id, DIST_NAME, ADM_STATUS, REG_NAME, everything())

@@ -11,10 +11,12 @@ library(tidyverse)
 
 options(scipen = 999) # turn off scientific notation for all variables
 
-#Specify paths relative to repo root
-input_path <- "Data/Surveys/"
-output_path <- "Output_Data/"
-shapefile_path <- "Data/Shapefiles/"
+#Specify Drive Path
+drive_path <- "D:/Malawi/"
+input_path <- paste0(drive_path, "Data/Surveys/")
+corr_input_path <- paste0(drive_path, "new_data/")
+output_path <- paste0(drive_path, "/Output_Data/")
+shapefile_path <- paste0(drive_path, "Data/Shapefiles/")
 
 ##################################################################################
 ##################################################################################
@@ -22,12 +24,13 @@ shapefile_path <- "Data/Shapefiles/"
 #load data
 ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use_Corrected.shp"))
 
+#check names of variables in ea shapefile
+names(ea)
+
 #Check whether EA_CODE are duplicated (returns TRUE or FALSE)
 any(duplicated(ea$EA_CODE))
 
 # Count the total number of duplicate rows
-# TODO - there are duplicate EAs - when you look at them on the map they fall on a lake
-# Are they identical rows or do they have different hh numbers? Do they have any hh?
 sum(duplicated(ea$EA_CODE))
 
 #Extract all rows where the EA_CODE appears more than once
@@ -42,9 +45,7 @@ ea_duplicates <- ea %>%
   #tm_polygons("EA_CODE", id = "DIST_NAME")
 
 
-#Create a Pseudo Unique ID for all the EAs in the country in "cluster_id" column
-# it creates new EA ID starting aith 000001...NNNNNN. This is to avoid issues with
-# duplicate EA code - TODO: remove duplicate EA codes instead
+#Create a Pseudo Unique ID for all the EAs in the country
 ea <- ea %>%
   mutate(
     cluster_id = paste0("EA", sprintf("%06d", row_number())))
@@ -52,15 +53,12 @@ ea <- ea %>%
 #check duplicates
 any(duplicated(ea$cluster_id))
 
-#Fix corrupt geometries - the file has topological errors - where there could be gaps 
-# between boundries, when boundaries cross etc - this smooths those errors over
+#Fix corrupt geometries
 st_make_valid(ea)
 
-#Turn of geometric plane - use 2D plane rather than 3D - using the projection specified
-# in the file
+#Turn of geometric plane
 sf::sf_use_s2(FALSE)
 
-# Remove the ea_duplicates object from memory and Calls garbage collection to free up memory
 rm(ea_duplicates); gc()
 
 #####################################################################################
@@ -68,40 +66,65 @@ rm(ea_duplicates); gc()
 ######### PROCESS 2018 CENSUS DATA #################################################
 
 #Load datasets
-mphc_2018 <- read_dta(paste0(input_path, "0923_pop_modelling_data.dta"))
+mphc_2018 <- read_dta(paste0(corr_input_path, "0923_pop_modelling_data.dta"))
+
+#head 
+head(mphc_2018)
+
+#names
+names(mphc_2018)
 
 # Mutate and add a  variable called no_persons = 1 (individual record)
-# every row will have 1 because there is a person per row
 mphc_2018 <- mphc_2018 %>% 
   mutate(no_persons = 1)  # Individual observation
 
-#Create unique hh id based on the p02
+#Create unique hh id based on the p02, cg don't need this now?
 # Create a unique ID that increase every time hh_head (p02) is 1
-# Each row will have a hh id
-mphc_2018  <- mphc_2018  %>% 
-  mutate(unique_hh = cumsum(p02 == 1))
+#mphc_2018  <- mphc_2018  %>% 
+#  mutate(unique_hh = cumsum(p02 == 1))
 
-#Create Another Unique ID for household and EA Code
+#Create Another Unique ID for household and EA Code ,cg changed to new_hhno 29Sept Ortis advice
 mphc_2018  <- mphc_2018  %>% 
-  mutate(Unique_HH_EA_CODE = str_c(ea_code, unique_hh))
+  mutate(Unique_HH_EA_CODE = str_c(ea_code, new_hhno))
+
+#cg extract records where line_number = 1 but p02>1 (homeless)
+#mphc_2018_homeless <- mphc_2018 %>%
+#  filter(line_number == 1 & p02 >1)
+#CG Write to file
+#write.csv(mphc_2018_homeless, paste0(output_path, "mphc_2018_homeless"), row.names = F)
+
+#cg remove these records from the main file, cg this didn't work... 2nd attempt after this
+#mphc_2018 <- mphc_2018 %>%
+#  filter_out(line_number == 1 & p02 >1)
+
+#create new var concatenating line_number and p02 to filter out homeless
+mphc_2018  <- mphc_2018  %>% 
+  mutate(homeless = str_c(line_number, p02))
+
+#unique(mphc_2018$homeless)
+
+#cg remove these records from the main file
+mphc_2018 <- mphc_2018 %>%
+  filter_out(homeless == "130")
+
+
+
+#summarized hh count new supply to check number of households
+mphc_2018_summ <- mphc_2018 %>%  
+  group_by(Unique_HH_EA_CODE) %>%  
+  summarise(mphc_total_pop = sum(no_persons, na.rm = T),
+            mphc_hh_count = n_distinct(Unique_HH_EA_CODE)) %>%    #Distinct count of household
+  ungroup()
 
 ##################################################################
 ##################################################################
 ### Process Points with GPS
-#TODO - Instead of just dropping records with NA in log/lat, it would be good to first group the data
-# by Unique_HH_EA_CODE and if there is a group that has at least one record with GPS coordinates, 
-# we could use that group's centroid instead of dropping all records.
-
-# It would also be useful to check how many records show different GPS coordinates within the same Unique_HH_EA_CODE
-# and if there are some that are different if they are in close proximity or not.
 
 # Filter points with gps coordinates
 mphc_with_gps <- mphc_2018 %>%  
-  drop_na(hh_longitude, hh_latitude)
+  drop_na(hh_longitude, hh_latitude) 
 
-#Get the centroid of household within cluster
-# This is using all the gps locations within each Unique_HH_EA_CODE to calculate a mean
-# You end up with one row per hh (household) within each Unique_HH_EA_CODE
+##Get the centroid of household within cluster
 mphc_with_gps <- mphc_with_gps %>%
   group_by(Unique_HH_EA_CODE) %>%
   summarise(
@@ -116,24 +139,19 @@ mphc_with_gps <- mphc_with_gps %>%
 mphc_with_gps <- mphc_with_gps %>%  
   st_as_sf(coords = c("hh_longitude", "hh_latitude"))
 
-# set the spatial reference to wgs 1984 because the data doesn't have any
+# set the spatial reference to wgs 1984
 st_crs(mphc_with_gps) <- 4326
 
-#Project the mphc data points to the EA shapefile spatial reference
+#Project the points to the EA spatial reference
 mphc_with_gps <- st_transform(mphc_with_gps, crs = st_crs(ea))
 
-#Assign each point to it nearest EA it is located within Malawi
-# If any fall outside boundary of Malawi it is assigned the nearest EA
-# k = 1 means find the 1 nearest neighbor (closest polygon for each point)
-# nngeo::st_nn() returns a list structure [[1]], so extracts the first 
-# (and only) element from that list to get the vector of indices
+#Assign each point to it nearest EA it is located within 
 nearest_indices <- st_nearest_feature(mphc_with_gps, ea)
 
 #Extract the EA_CODE  of the nearest polygons
 nearest_ids <- ea$EA_CODE[nearest_indices]
 
 # Add the EA_CODE to data
-# TODO - Match the record from nearest indecies with the mphc_with_gps records to ensure correct assignment
 mphc_with_gps$EA_CODE <- nearest_ids
 
 #Convert data to tibble
@@ -143,11 +161,10 @@ mphc_with_gps <- mphc_with_gps %>%
 
 #########################################################################
 
-# Here we are going to process record without gps
+# Here we are going to process record without gps first ,cg note this is now 'we're going to do these second'
 # We are processing the data based on the Census EA_CODE
 
 # Filter records without GPS coordinates
-# TODO - instead get the records for which no one in the Unique_HH_EA_CODE has GPS coordinates
 mphc_no_gps <- mphc_2018 %>% 
   filter(is.na(hh_longitude) | is.na(hh_latitude))
 
@@ -155,7 +172,7 @@ mphc_no_gps <- mphc_2018 %>%
 mphc_no_gps <- mphc_no_gps %>%  
   group_by(Unique_HH_EA_CODE) %>%  
   summarise(mphc_total_pop = sum(no_persons, na.rm = T),
-            mphc_hh_count = n_distinct(unique_hh)) %>%    #Distinct count of household
+            mphc_hh_count = n_distinct(Unique_HH_EA_CODE)) %>%    #Distinct count of household, cg note this should be changed from (unique_hh to Unique_HH_EA_CODE)
   ungroup()
 
 #Because there is potential for duplicate hh with those with gps
@@ -190,7 +207,6 @@ sum(mphc_summary$mphc_hh_count)
 mphc_summary <- mphc_summary %>% 
   rename(hh_count_2018 = mphc_hh_count,
          total_pop_2018 = mphc_total_pop)
-
 
 #Remove all object except the ones listed
 rm(list = setdiff(ls(), c("drive_path", "input_path", "output_path", 
@@ -770,7 +786,7 @@ combined_data <- combined_data %>%
       !is.na(naca_hh_count) ~ naca_hh_count,
       # else if ict_hh_count is available, use it (4th priority)
       !is.na(ict_hh_count) ~ ict_hh_count,
-      # else if zomba_hh_count is available, use it (last priority)
+      # else if zomba_hh_count is available, use it (last priority) ,cg Zomba data excluded until lat/long fixed
       #!is.na(zomba_hh_count) ~ zomba_hh_count,
       # else put NA
       TRUE ~ NA_real_

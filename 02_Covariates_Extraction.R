@@ -8,8 +8,10 @@ library(tictoc)
 library(terra)
 library(exactextractr)
 
+
+
 #Specify Drive Path
-drive_path <- "C:/Users/baizaa/Office for National Statistics/H_drive_backup/CDS-AI projects/MalawiWorlPop census/September 26 workshop/Workshop_Script/"
+drive_path <- "D:/Malawi/"
 input_path <- paste0(drive_path, "Output_Data/")
 shapefile_path <-  paste0(drive_path, "Data/Shapefiles/")
 covs_path_2018 <- paste0(drive_path, "Data/Covariates/Covariates_2018/")
@@ -36,8 +38,7 @@ st_make_valid(ea)
 #Turn of geometric plane
 sf::sf_use_s2(FALSE)
 
-#Project EA to the raster spatial reference - we have only taken 1 raster
-# so that you can project to that one - all the others should have the same spatial reference system
+#Project EA to the raster spatial reference
 ea <- st_transform(ea, crs = st_crs(r1))
 
 #################################################################################################
@@ -45,7 +46,7 @@ ea <- st_transform(ea, crs = st_crs(r1))
 ############ Extract 2018 Data #################################################################
 ################################################################################################
 
-# First we will extract building count in each EA for 2018 by doing a zonal statistics operation
+# First we will extract building count for 2018 by doing a zonal statistics operation
 # We will sum all the pixels located within a given EA to get total count of buildings
 
 #Get a list of all building count rasters
@@ -53,12 +54,10 @@ bcount_rasters_list <- list.files(path=bcount_path_2018, pattern= ".tif$", all.f
 bcount_rasters_list
 
 
-#Stack all rasters - he extracts all of them so that he can experiment which one works better
-# during the modelling stage - in the end there is only one used
+#Stack all rasters
 bcount_2018 <- rast(paste0(bcount_path_2018, c(bcount_rasters_list)))
 
-#Extract rasters by summing all pixel values - if the pixel falls in the edge of the EA
-# it does a percent of the pixel falling in an EA - we want the total
+#Extract rasters by summing all pixel values
 tic()
 
 bcount_2018_extract <- exactextractr::exact_extract(bcount_2018, ea, fun = 'sum')
@@ -84,7 +83,7 @@ raster_list
 #Stack all covariates 
 raster_2018_covariates <- rast(paste0(covs_path_2018, c(raster_list)))
 
-#Extract rasters using their mean values - you want the average distance to a water body
+#Extract rasters using their mean values
 tic()
 
 raster_2018_extract <- exactextractr::exact_extract(raster_2018_covariates, ea, fun = 'mean')
@@ -111,9 +110,6 @@ write.csv(var_names, paste0(output_path, "var_names_2018.csv"))
 ############################################################################
 
 #Next we will get the centroid of each EA
-# there is something called point on surface which could be better
-# because there is a chance that weird shaped EA - the centroid won't fall
-# within the EA polygon
 
 # Get Centroid of EA as Lat Long ------------------------------------------
 # Extract the centroid of the polygon
@@ -142,11 +138,9 @@ pop_data <- pop_data %>%
 ea_2018 <- ea_2018 %>%  
   left_join(pop_data, by = "EA_CODE")
 
-#Arrange data in order - removes geometry and anything starting with x
-# but then reintroduces the columns starting with x at the end so all the 
-# admin data before the covariates
+#Arrange data in order
 ea_2018 <- ea_2018 %>%
-  dplyr::select(-starts_with(c("x", "geometry")), starts_with("x"))
+  select(-starts_with(c("x", "geometry")), starts_with("x"))
 
 #Export to file
 write.csv(ea_2018, paste0(output_path, "Malawi_2018_data.csv"), row.names = F)
