@@ -14,9 +14,9 @@ library(tidyverse)  # For data manipulation
 options(scipen=999)
 
 #Specify Drive Path
-drive_path <- "C:/Users/oy1r22/OneDrive - University of Southampton/Desktop/Malawi_Workshop/"
+drive_path <- "D:/Malawi/"
 input_path <- paste0(drive_path, "Output_Data/")
-output_path <- paste0(drive_path, "Output/")
+output_path <- paste0(drive_path, "Output_Data/")
 
 #Load dataset
 Malawi_2024_data <- read.csv(paste0(input_path, "Malawi_2024_data.csv"))
@@ -51,8 +51,8 @@ EA_data <- EA_data %>%
 
 #Select covariates
 covs <- EA_data  %>% 
-  select(starts_with("x")) %>% 
-  select(where(~ !any(is.na(.))))  # Remove covariates with NAs
+  dplyr::select(starts_with("x")) %>% 
+  dplyr::select(where(~ !any(is.na(.))))  # Remove covariates with NAs
 
 #Scaling function to scale covariates
 stdize <- function(x)
@@ -65,7 +65,7 @@ covs <- apply(covs, 2, stdize) %>%    #z-score
 
 #cbind scaled covariates for model fitting
 EA_data <- EA_data %>% 
-  select(-starts_with("x")) %>% 
+  dplyr::select(-starts_with("x")) %>% 
   cbind(covs) 
 
 #Convert District and Rural Urban Variables to factors
@@ -104,7 +104,7 @@ model_evaluation <- data.frame(Observed = EA_data$hh_count_2024,
 
 # compute goodness-of-fit metrics
 model_evaluation <- model_evaluation %>% 
-  mutate(residual = Predicted - Observed)
+  mutate(residual = Observed - Predicted)
 
 #Find observed and predicted population sum
 sum(model_evaluation$Observed)
@@ -158,7 +158,7 @@ model_evaluation <- data.frame(Observed = EA_data$hh_count_2024,
 
 # compute goodness-of-fit metrics
 model_evaluation <- model_evaluation %>% 
-  mutate(residual = Predicted - Observed)
+  mutate(residual = Observed - Predicted)
 
 #Find observed and predicted population sum
 sum(model_evaluation$Observed)
@@ -276,7 +276,7 @@ train_evaluation <- data.frame(Observed = train_data$hh_count_2024, Predicted = 
 
 # compute goodness-of-fit metrics
 train_evaluation <- train_evaluation %>% 
-  mutate(residual = Predicted - Observed)
+  mutate(residual = Observed - Predicted)
 
 In_Sample <- train_evaluation %>%
   summarise(Bias= mean(residual),
@@ -294,7 +294,7 @@ In_Sample
 predictions <- predict(nb_model_train, newdata = test_data, type = "response")
 
 # Print the predictions
-#print(predictions)
+print(predictions)
 
 
 # Create a dataframe with observed and predicted values
@@ -302,7 +302,7 @@ test_evaluation <- data.frame(Observed = test_data$hh_count_2024,
                               Predicted = predictions, Model = "Out-Sample")
 
 test_evaluation <- test_evaluation %>% 
-  mutate(residual = Predicted - Observed)
+  mutate(residual = Observed - Predicted)
 
 # compute goodness-of-fit metrics
 
