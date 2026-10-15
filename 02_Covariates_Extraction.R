@@ -9,12 +9,11 @@ library(exactextractr)
 
 
 # Specify Drive Path
-drive_path <- "D:/Malawi/"
-input_path <- paste0(drive_path, "Output_Data/")
-shapefile_path <- paste0(drive_path, "Data/Shapefiles/")
-covs_path_2018 <- paste0(drive_path, "Data/Covariates/Covariates_2018/")
-bcount_path_2018 <- paste0(drive_path, "Data/Covariates/Buildings_2018/")
-output_path <- paste0(drive_path, "Output_Data/")
+input_path <- "Output_Data/"
+shapefile_path <- "Data/Shapefiles/"
+covs_path_2018 <- "Data/Covariates/Covariates_2018/"
+bcount_path_2018 <- "Data/Covariates/Buildings_2018/"
+output_path <- "Output_Data/"
 
 
 # Load dataset ------------------------------------------------------------
@@ -174,8 +173,8 @@ cat("\014")
 ################################################################################################
 
 # Specify data location
-covs_path_2024 <- paste0(drive_path, "Data/Covariates/Covariates_2024/")
-bcount_path_2024 <- paste0(drive_path, "Data/Covariates/Buildings_2024/")
+covs_path_2024 <- "Data/Covariates/Covariates_2024/"
+bcount_path_2024 <- "Data/Covariates/Buildings_2024/"
 
 # Extract Building Count --------------------------------------------------
 
@@ -296,8 +295,8 @@ cat("\014")
 ################################################################################################
 
 # Specify data location
-covs_path_2026 <- paste0(drive_path, "Data/Covariates/Covariates_2026/")
-bcount_path_2026 <- paste0(drive_path, "Data/Covariates/Buildings_2026/")
+covs_path_2026 <- "Data/Covariates/Covariates_2026/"
+bcount_path_2026 <- "Data/Covariates/Buildings_2026/"
 
 # 2026
 bcount_rasters_list <- list.files(path = bcount_path_2026, pattern = ".tif$", all.files = TRUE, full.names = FALSE)

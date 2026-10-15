@@ -8,10 +8,9 @@ library(raster)
 
 
 # Specify Drive Path
-drive_path <- "D:Malawi/"
-output_path <- paste0(drive_path, "Output_Data/")
-shapefile_path <- paste0(drive_path, "Data/Shapefiles/")
-bcount_path_2018 <- paste0(drive_path, "Data/Covariates/Buildings_2018/")
+output_path <- "Output_Data/"
+shapefile_path <- "Data/Shapefiles/"
+bcount_path_2018 <- "Data/Covariates/Buildings_2018/"
 
 # Load datasets
 ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use_Corrected.shp"))
@@ -46,7 +45,7 @@ ea <- ea %>%
 country <- st_transform(country, crs = st_crs(bcount))
 
 # Rasterize
-country_raster <- rasterize(country, bcount, field = "Country_ID")
+country_raster <- terra::rasterize(country, bcount, field = "Country_ID")
 plot(country_raster)
 
 # stack rasters
@@ -63,7 +62,7 @@ writeRaster(country_raster, paste0(output_path, "country_raster.tif"),
 rural_urban <- st_transform(ea, crs = st_crs(bcount))
 
 # Rasterize
-rural_urban_raster <- rasterize(rural_urban, bcount, field = "rural_urban_id")
+rural_urban_raster <- terra::rasterize(rural_urban, bcount, field = "rural_urban_id")
 plot(rural_urban_raster)
 
 # stack rasters
@@ -79,7 +78,7 @@ writeRaster(rural_urban_raster, paste0(output_path, "rural_urban_raster.tif"),
 
 district <- st_transform(ea, crs = st_crs(bcount))
 
-district_raster <- rasterize(district, bcount, field = "dist_id")
+district_raster <- terra::rasterize(district, bcount, field = "dist_id")
 plot(district_raster)
 
 # stack rasters
@@ -98,7 +97,7 @@ region <- ea %>%
 
 region <- st_transform(region, crs = st_crs(bcount))
 
-region_raster <- rasterize(region, bcount, field = "REG_CODE")
+region_raster <- terra::rasterize(region, bcount, field = "REG_CODE")
 plot(region_raster)
 
 # stack rasters
@@ -113,7 +112,7 @@ writeRaster(region_raster, paste0(output_path, "region_raster.tif"),
 
 ea <- st_transform(ea, crs = st_crs(bcount))
 
-ea_raster <- rasterize(ea, bcount, field = "ea_id")
+ea_raster <- terra::rasterize(ea, bcount, field = "ea_id")
 plot(ea_raster)
 
 # stack rasters

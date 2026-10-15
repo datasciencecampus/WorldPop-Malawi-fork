@@ -68,7 +68,7 @@ sf::sf_use_s2(FALSE)
 ######### PROCESS 2018 CENSUS DATA #################################################
 
 # Load datasets
-mphc_2018 <- read_dta(paste0(corr_input_path, "0923_pop_modelling_data.dta"))
+mphc_2018 <- read_dta(paste0(input_path, "0923_pop_modelling_data.dta"))
 
 
 # Mutate and add a  variable called no_persons = 1 (individual record)
@@ -101,12 +101,15 @@ mphc_2018 <- mphc_2018 %>%
 
 # unique(mphc_2018$homeless)
 
+# TODO: need to document how many homeless people have been removed from data
+# and put into report.
+
 # cg remove these records from the main file
 mphc_2018 <- mphc_2018 %>%
   filter_out(homeless == "130")
 
 
-
+# TODO: Add into report, maybe shows people by household
 # summarized hh count new supply to check number of households
 mphc_2018_summ <- mphc_2018 %>%
   group_by(Unique_HH_EA_CODE) %>%
@@ -115,6 +118,7 @@ mphc_2018_summ <- mphc_2018 %>%
     mphc_hh_count = n_distinct(Unique_HH_EA_CODE)
   ) %>% # Distinct count of household
   ungroup()
+
 
 ##################################################################
 ##################################################################

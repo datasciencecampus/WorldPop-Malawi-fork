@@ -8,12 +8,11 @@ library(feather)
 library(sf)
 
 # Specify Drive Path
-drive_path <- "D:/Malawi/"
-covs_path_2018 <- paste0(drive_path, "Data/Covariates/Covariates_2018/")
-output_path <- paste0(drive_path, "Output_Data/")
-input_path <- paste0(drive_path, "Output_Data/")
-shapefile_path <- paste0(drive_path, "Data/Shapefiles/")
-bcount_path_2018 <- paste0(drive_path, "Data/Covariates/Buildings_2018/")
+covs_path_2018 <- "Data/Covariates/Covariates_2018/"
+output_path <- "Output_Data/"
+input_path <- "Output_Data/"
+shapefile_path <- "Data/Shapefiles/"
+bcount_path_2018 <- "Data/Covariates/Buildings_2018/"
 
 # load rasters - you use the google because it has higher building counts
 google_v2_5 <- rast(paste0(bcount_path_2018, "MOS_MLW_buildings_count_2018_glv2_5_t0_5_C_100m_v1.tif"))
