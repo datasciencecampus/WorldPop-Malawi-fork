@@ -1230,16 +1230,16 @@ logger::log_info("2018-2024 stage complete; carrying forward {nrow(predicted_hh_
 # Remove all object except the ones listed
 rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
-  "shapefile_path", "pop_output", "predicted_hh_count_2024"
+  "shapefile_path", "pop_path", "predicted_hh_count_2024"
 )))
 
 # Clear console
 cat("\014")
 
 
-#################################################################################################
-#################################################################################################
-############ GROWTH FACTOR 2024 to 2026 MODEL #################################################################
+################################################################################################
+################################################################################################
+############ GROWTH FACTOR 2024 to 2026 MODEL ##################################################
 ################################################################################################
 
 # Load 2024 Data
@@ -1631,7 +1631,7 @@ logger::log_info("Model 5 validation complete: {nrow(predictions_2026)} EAs; RMS
 
 # Write Results to file
 logger::log_info("Writing 2026 validation predictions to {paste0(pop_path, 'Growth_Factor_Full_Posterior.csv')}.")
-write.csv(predictions_2026, paste0(pop_path, "Growth_Factor_Full_Posterior.csv"), row.names = F)
+write.csv(predictions_2026, file.path(pop_path, "Growth_Factor_Full_Posterior.csv"), row.names = F)
 logger::log_info("Prediction CSV written; preparing 2026 summaries and diagnostic plots.")
 
 ###############################################################################
