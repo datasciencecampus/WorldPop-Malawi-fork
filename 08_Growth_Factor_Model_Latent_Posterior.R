@@ -22,11 +22,10 @@ options(scipen = 999) # turn off scientific notation for all variables
 # options(digits = 3)
 
 # Specify Drive Path
-drive_path <- "D:/Malawi/"
-input_path <- paste0(drive_path, "Output_Data/")
-output_path <- paste0(drive_path, "Output_Data/Predicted_Estimates/")
-shapefile_path <- paste0(drive_path, "Data/Shapefiles/")
-pop_path <- paste0(drive_path, "Output_data/Predicted_Estimates")
+input_path <- "Output_Data/"
+output_path <- "Output_Data/Predicted_Estimates/"
+shapefile_path <- "Data/Shapefiles/"
+pop_path <- "Output_Data/Predicted_Estimates"
 
 #####################################################################################
 #####################################################################################

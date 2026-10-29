@@ -14,16 +14,30 @@ library(inlabru)
 library(feather)
 library(tidyverse)
 
+# had to add this one in
+library(sn)
+
 set.seed(1234) # set seed for reproducibility
 
 options(scipen = 999) # turn off scientific notation for all variables
 # options(digits = 3)
 
 # Specify Drive Path
-drive_path <- "D:/Malawi/"
-input_path <- paste0(drive_path, "Output_Data/")
-output_path <- paste0(drive_path, "Output_Data/Predicted_Estimates/")
-shapefile_path <- paste0(drive_path, "Data/Shapefiles/")
+# drive_path <- "D:/Malawi/"
+input_path <- "Output_Data/"
+output_path <- "Output_Data/Predicted_Estimates/"
+shapefile_path <- "Data/Shapefiles/"
+pop_path <- "Output_Data/Predicted_Estimates"
+
+# TODO: REMOVE Only needed if you can't download INLA
+# url <- "https://inla.r-inla-download.org/R/stable/bin/windows/contrib/4.6/PACKAGES"
+# download.file(url, tempfile(), method = "libcurl")
+
+# options(repos = c(
+#   CRAN = "https://cloud.r-project.org",
+#   INLA = "https://inla.r-inla-download.org/R/stable"
+# ))
+# install.packages("INLA", dependencies = TRUE)
 
 #####################################################################################
 #####################################################################################
