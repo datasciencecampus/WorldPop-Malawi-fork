@@ -22,13 +22,15 @@ shapefile_path <- "Data/Shapefiles/"
 # load data
 ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use_Corrected.shp"))
 
-
 # Check whether EA_CODE are duplicated (returns TRUE or FALSE)
 any(duplicated(ea$EA_CODE))
 
 # Count the total number of duplicate rows
 # TODO - there are duplicate EAs - when you look at them on the map they fall on a lake
 # Are they identical rows or do they have different hh numbers? Do they have any hh?
+
+# TODO: Filter out duplicates so you're not dealing with two dataframes. Add
+# report on duplicates to the logs if necessary.
 sum(duplicated(ea$EA_CODE))
 
 # Extract all rows where the EA_CODE appears more than once
@@ -123,20 +125,22 @@ mphc_2018_summ <- mphc_2018 %>%
 ##################################################################
 ##################################################################
 ### Process Points with GPS
-# TODO - Instead of just dropping records with NA in log/lat, it would be good to first group the data
-# by Unique_HH_EA_CODE and if there is a group that has at least one record with GPS coordinates,
-# we could use that group's centroid instead of dropping all records.
+# TODO - Instead of just dropping records with NA in log/lat, it would be good
+# to first group the data by Unique_HH_EA_CODE and if there is a group that
+# has at least one record with GPS coordinates, we could use that group's
+# centroid instead of dropping all records.
 
-# It would also be useful to check how many records show different GPS coordinates within the same Unique_HH_EA_CODE
-# and if there are some that are different if they are in close proximity or not.
+# TODO: It would also be useful to check how many records show different GPS
+# coordinates within the same Unique_HH_EA_CODE and if there are some that are
+# different if they are in close proximity or not.
 
 # Filter points with gps coordinates
 mphc_with_gps <- mphc_2018 %>%
   drop_na(hh_longitude, hh_latitude)
 
 # Get the centroid of household within cluster
-# This is using all the gps locations within each Unique_HH_EA_CODE to calculate a mean
-# You end up with one row per hh (household) within each Unique_HH_EA_CODE
+# This is using all the gps locations within each Unique_HH_EA_CODE to calculate
+# a mean, you end up with one row per hh (household) within each Unique_HH_EA_CODE
 mphc_with_gps <- mphc_with_gps %>%
   group_by(Unique_HH_EA_CODE) %>%
   summarise(
@@ -178,11 +182,13 @@ mphc_with_gps <- mphc_with_gps %>%
 
 #########################################################################
 
-# Here we are going to process record without gps first ,cg note this is now 'we're going to do these second'
-# We are processing the data based on the Census EA_CODE
+# Here we are going to process record without gps first ,cg note this is now
+# 'we're going to do these second' We are processing the data based on the
+# Census EA_CODE
 
 # Filter records without GPS coordinates
-# TODO - instead get the records for which no one in the Unique_HH_EA_CODE has GPS coordinates
+# TODO - instead get the records for which no one in the Unique_HH_EA_CODE has
+# GPS coordinates
 mphc_no_gps <- mphc_2018 %>%
   filter(is.na(hh_longitude) | is.na(hh_latitude))
 
@@ -192,7 +198,7 @@ mphc_no_gps <- mphc_no_gps %>%
   summarise(
     mphc_total_pop = sum(no_persons, na.rm = T),
     mphc_hh_count = n_distinct(Unique_HH_EA_CODE)
-  ) %>% # Distinct count of household, cg note this should be changed from (unique_hh to Unique_HH_EA_CODE)
+  ) %>% # Distinct count of household
   ungroup()
 
 # Because there is potential for duplicate hh with those with gps
@@ -254,6 +260,7 @@ ICT_data <- ICT_data %>%
 # summarize gps accuracy of ICT data record
 summary(ICT_data$GPS__Accuracy)
 
+# TODO: This makes no sense, it just says do the same thing no matter what
 # if gps accuracy is greater than 5m summarize data in original EA Code
 # If record has no gps summarize data in original EA Code
 
@@ -314,6 +321,9 @@ ICT_rbind <- ICT_rbind %>%
   group_by(EA_Number) %>%
   summarise(across(everything(), \(x) sum(x, na.rm = TRUE)))
 
+# TODO: What happens when they don't add up? what happens when they do?
+# Wrap this in some sort of error handling, explicitly stating what should
+# happen
 # check whether data adds up to original
 sum(ICT_rbind$ict_hh_count)
 sum(ICT_data$hh_count)
@@ -634,6 +644,7 @@ files <- list.files(
   full.names = TRUE
 )
 
+# TODO: again add some error handling here, I check the files so what?
 # Check files
 files
 
