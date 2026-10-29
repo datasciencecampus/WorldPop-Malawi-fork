@@ -1600,7 +1600,7 @@ val_2026 %>%
   kable(digits = 3)
 
 # Write Results to file
-# write.csv(predictions_2026, paste0(pop_path, "Growth_Factor_Full_Posterior.csv"), row.names = F)
+write.csv(predictions_2026, paste0(pop_path, "Growth_Factor_Full_Posterior.csv"), row.names = F)
 
 ###############################################################################
 ##############################################################################

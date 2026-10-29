@@ -1505,7 +1505,7 @@ val_2026 %>%
   kable(digits = 3)
 # cg result mae 59.719, coverage 62%
 # Write Results to file
-write.csv(predictions_2026, paste0(pop_path, "Growth_Factor_Full_Posterior.csv"), row.names = F)
+write.csv(predictions_2026, paste0(pop_path, "Growth_Factor_Latent_Posterior.csv"), row.names = F)
 # cg work out where this writes to, as hasn't gone to right place,where is
 # pop_path going?
 ###############################################################################
