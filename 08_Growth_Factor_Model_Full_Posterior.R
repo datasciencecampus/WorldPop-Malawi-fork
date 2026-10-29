@@ -13,6 +13,7 @@ library(kableExtra)
 library(inlabru)
 library(feather)
 library(tidyverse)
+library(conflicted)
 
 # had to add this one in
 library(sn)
@@ -20,6 +21,7 @@ library(sn)
 set.seed(1234) # set seed for reproducibility
 
 options(scipen = 999) # turn off scientific notation for all variables
+conflicts_prefer(dplyr::filter) # use dplyr filter
 # options(digits = 3)
 
 # Specify Drive Path
