@@ -81,6 +81,10 @@ sources:
     data_file: malemia_hh_without_IDs.csv
     longitude_col: hh_longitude
     latitude_col: hh_latitude
+  census_mapping:
+    required: true
+    data_file: CensusMapping_data_09092026.xlsx
+    sheet: 1
 
 outputs:
   data_processing2_summarized_csv: ./data/Output_Data/summarized_survey_data.csv
