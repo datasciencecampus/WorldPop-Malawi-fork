@@ -262,6 +262,7 @@ summary(mod1_count)
 # Get the precision (variance parameter) and convert to std deviation
 sd <- sqrt(1 / mod1_count$summary.hyperpar["Precision for the lognormal observations", "mean"])
 
+
 # Generate samples
 mu_samples <- generate(
   mod1_count,
@@ -272,7 +273,6 @@ mu_samples <- generate(
   seed = 2,
   num.threads = "1"
 )
-
 # Simulate Posterior Predictive growth_factor for Training Data
 growth_factor_draws <- map_dfc(
   1:n.samples,
@@ -1655,7 +1655,7 @@ plot_data <- predictions_2026 %>%
     values_to = "Value"
   ) %>%
   mutate(
-    Variable = recode(Variable,
+    Variable = dplyr::recode(Variable,
       hh_count_2026 = "Survey 2026 Data",
       predicted_hh_count = "Predictions"
     )
@@ -1973,9 +1973,9 @@ plot_data_rural_urban <- rural_urban %>%
     values_to = "Value"
   ) %>%
   mutate(
-    Variable = recode(Variable,
+    Variable = dplyr::recode(Variable,
       hh_count_2026 = "Survey 2026 Data",
-      predicted_hh_count = "Predictions"
+      predicted_hh_count_2026 = "Predictions"
     )
   )
 
