@@ -25,24 +25,42 @@ run_growth_model <- TRUE
 
 # ---- pipeline ----
 #
+# NOTE: I have separated these because we know the data processing is
+# deterministic, I can feasibly see us having to run the growth models multiple
+# times to confirm if they are deterministic or not.
 
-if (run_data_processing) {
-  source("01_Data_Processing.R")
-  source("02_Covariates_Extraction.R")
-  source("03_Rasterization.R")
-  source("04_Covs_Stack_Prediction_Grid_2018.R")
-  source("04_Covs_Stack_Prediction_Grid_2024.R")
-  source("04_Covs_Stack_Prediction_Grid_2026.R")
-} else {
-  log_info("Data Processing stages have been skipped.")
-}
+# withCallingHandlers is used to dump any errors that fail the pipeline into
+# the pipeline logs
+withCallingHandlers(
+  {
+    if (run_data_processing) {
+      source("01_Data_Processing.R")
+      source("02_Covariates_Extraction.R")
+      source("03_Rasterization.R")
+      source("04_Covs_Stack_Prediction_Grid_2018.R")
+      source("04_Covs_Stack_Prediction_Grid_2024.R")
+      source("04_Covs_Stack_Prediction_Grid_2026.R")
+    } else {
+      log_info("Data Processing stages have been skipped.")
+    }
 
-if (run_growth_model) {
-  log_info("Running '08_Growth_Factor_Model_Full_Posterior.R'...")
-  source("08_Growth_Factor_Model_Full_Posterior.R")
+    if (run_growth_model) {
+      log_info("Running '08_Growth_Factor_Model_Full_Posterior.R'...")
+      source("08_Growth_Factor_Model_Full_Posterior.R")
 
-  log_info("Running '08_Growth_Factor_Model_Latent_Posterior.R'...")
-  source("08_Growth_Factor_Model_Latent_Posterior.R")
-} else {
-  log_info("Growth Model has been skipped.")
-}
+      log_info("Running '08_Growth_Factor_Model_Latent_Posterior.R'...")
+      source("08_Growth_Factor_Model_Latent_Posterior.R")
+    } else {
+      log_info("Growth Model has been skipped.")
+    }
+  },
+  error = function(error) {
+    logger::log_error("Pipeline failed: {conditionMessage(error)}")
+    if (!is.null(conditionCall(error))) {
+      logger::log_error("Failing call: {paste(deparse(conditionCall(error)), collapse = ' ')}")
+    }
+  }
+)
+
+# TODO: RIP Graphs created from growth models and throw them into a Quarto
+# html report. same thing for high level model statistics.
