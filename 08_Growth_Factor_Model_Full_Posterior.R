@@ -24,6 +24,8 @@ options(scipen = 999) # turn off scientific notation for all variables
 conflicts_prefer(dplyr::filter) # use dplyr filter
 # options(digits = 3)
 
+logger::log_info("Starting full posterior growth-factor workflow.")
+
 # Specify Drive Path
 # drive_path <- "D:/Malawi/"
 input_path <- "Output_Data/"
@@ -47,7 +49,9 @@ pop_path <- "Output_Data/Predicted_Estimates"
 ##### ESTIMATING GROWTH FACTOR BETWEEN 2018 and 2024 ################################
 
 # Load summarized Population data
+logger::log_info("Loading 2018 population data from {input_path}Malawi_2018_data.csv.")
 pop_data <- read.csv(paste0(input_path, "Malawi_2018_data.csv"))
+logger::log_info("Loaded {nrow(pop_data)} rows for the 2018-2024 growth-factor stage.")
 
 # names
 names(pop_data)
@@ -236,6 +240,7 @@ n.samples <- 100
 formula1 <- growth_factor ~  google_v2_5 +
   Random_rural_urban(rural_urban_id, model = "iid", mapper = bru_mapper_index(n = rural_urban_group))
 
+logger::log_info("Fitting model 1 (2018-2024): rural/urban random effects; {nrow(EA_data)} training rows.")
 mod1_count <- bru(
   formula1,
   data = EA_data,
@@ -255,6 +260,7 @@ mod1_count <- bru(
 )
 
 summary(mod1_count)
+logger::log_info("Model 1 fitted; generating {n.samples} posterior predictive draws and validating 2024 estimates.")
 
 #------------------------------------------------------------------------------
 # Predict Growth Factor
@@ -448,6 +454,7 @@ val1_2024 <- predictions_2024 %>%
 val1_2024 %>%
   kable(digits = 3)
 
+logger::log_info("Model 1 validation complete: {nrow(predictions_2024)} EAs; RMSE = {val1_2024$RMSE}.")
 
 ##############################################################################
 #############################################################################
@@ -464,6 +471,7 @@ formula2 <- growth_factor ~  google_v2_5 +
   Random_dist(dist_id, model = "iid", mapper = bru_mapper_index(n = dist_groups))
 
 
+logger::log_info("Fitting model 2 (2018-2024): rural/urban and district random effects.")
 mod2_count <- bru(
   formula2,
   data = EA_data,
@@ -483,6 +491,7 @@ mod2_count <- bru(
 )
 
 summary(mod2_count)
+logger::log_info("Model 2 fitted; generating {n.samples} posterior predictive draws and validating 2024 estimates.")
 
 #------------------------------------------------------------------------------
 # Predict Growth Factor
@@ -678,6 +687,7 @@ val2_2024 <- predictions_2024 %>%
 val2_2024 %>%
   kable(digits = 3)
 
+logger::log_info("Model 2 validation complete: {nrow(predictions_2024)} EAs; RMSE = {val2_2024$RMSE}.")
 #############################################################################
 #############################################################################
 ###############################################################################
@@ -692,6 +702,7 @@ formula3 <- growth_factor ~  google_v2_5 +
   Random_EA(id, model = "iid", mapper = bru_mapper_index(n = ea_groups))
 
 
+logger::log_info("Fitting model 3 (2018-2024): rural/urban, district and EA random effects.")
 mod3_count <- bru(
   formula3,
   data = EA_data,
@@ -711,6 +722,7 @@ mod3_count <- bru(
 )
 
 summary(mod3_count)
+logger::log_info("Model 3 fitted; generating {n.samples} posterior predictive draws and validating 2024 estimates.")
 
 
 #------------------------------------------------------------------------------
@@ -920,6 +932,7 @@ val3_2024 <- predictions_2024 %>%
 val3_2024 %>%
   kable(digits = 3)
 
+logger::log_info("Model 3 validation complete: {nrow(predictions_2024)} EAs; RMSE = {val3_2024$RMSE}.")
 #############################################################################
 ##############################################################################
 #############################################################################
@@ -936,6 +949,7 @@ summary(dist(coords)) # summarizes the Euclidean distance between points in the 
 # TODO: inla.nonconvex.hull depreciated in v23.08.18, either backdate or use
 # recommended fmesher::fm_nonconvex_hull()
 # non_convex_bdry <- inla.nonconvex.hull(coords, -0.03, -0.05, resolution = c(100, 100))
+logger::log_info("Building the spatial mesh for model 4 (2018-2024).")
 non_convex_bdry <- fmesher::fm_nonconvex_hull(coords, -0.03, -0.05, resolution = c(100, 100))
 mesh <- fmesher::fm_mesh_2d_inla(
   boundary = non_convex_bdry, max.edge = c(0.1, 1),
@@ -962,6 +976,7 @@ formula4 <- growth_factor ~ google_v2_5 +
   Random_dist(dist_id, model = "iid", mapper = bru_mapper_index(n = dist_groups)) +
   Random_Spat(main = coords, model = spde)
 
+logger::log_info("Fitting model 4 (2018-2024): spatial model with {mesh$n} mesh nodes.")
 mod4_count <- bru(
   formula4,
   data = EA_data,
@@ -981,6 +996,7 @@ mod4_count <- bru(
 )
 
 summary(mod4_count)
+logger::log_info("Model 4 fitted; generating {n.samples} posterior predictive draws and validating 2024 estimates.")
 
 #------------------------------------------------------------------------------
 # Predict Growth Factor
@@ -1179,6 +1195,7 @@ val4_2024 <- predictions_2024 %>%
 val4_2024 %>%
   kable(digits = 3)
 
+logger::log_info("Model 4 validation complete: {nrow(predictions_2024)} EAs; RMSE = {val4_2024$RMSE}.")
 
 # Model Checks ------------------------------------------------------------
 
@@ -1205,6 +1222,7 @@ metrics_2024 %>% kable()
 predicted_hh_count_2024 <- prediction_summary_2024 %>%
   dplyr::select(cluster_id, predicted_hh_count_2024)
 
+logger::log_info("2018-2024 stage complete; carrying forward {nrow(predicted_hh_count_2024)} model 4 predictions.")
 ################## END OF GROWTH FACTOR 2018 to 2024 #########################
 ###############################################################################
 ###############################################################################
@@ -1225,12 +1243,14 @@ cat("\014")
 ################################################################################################
 
 # Load 2024 Data
+logger::log_info("Loading 2024 population data from {input_path}Malawi_2024_data.csv.")
 pop_data <- read.csv(paste0(input_path, "Malawi_2024_data.csv"))
 
 # Join 2024 Predictions to Data
 pop_data <- pop_data %>%
   inner_join(predicted_hh_count_2024, by = "cluster_id")
 
+logger::log_info("Joined {nrow(pop_data)} rows for the 2024-2026 growth-factor stage.")
 # names
 names(pop_data)
 
@@ -1362,6 +1382,7 @@ summary(dist(coords)) # summarizes the Euclidean distance between points in the 
 
 
 # build non-convex hull mesh
+logger::log_info("Building the spatial mesh for model 5 (2024-2026); {nrow(EA_data)} training rows.")
 non_convex_bdry <- fmesher::fm_nonconvex_hull(coords, -0.03, -0.05, resolution = c(100, 100))
 mesh <- fmesher::fm_mesh_2d_inla(
   boundary = non_convex_bdry, max.edge = c(0.1, 1),
@@ -1388,6 +1409,7 @@ formula5 <- growth_factor ~ google_v2_5 +
   Random_dist(dist_id, model = "iid", mapper = bru_mapper_index(n = dist_groups)) +
   Random_Spat(main = coords, model = spde)
 
+logger::log_info("Fitting model 5 (2024-2026): spatial model with {mesh$n} mesh nodes.")
 mod5_count <- bru(
   formula5,
   data = EA_data,
@@ -1407,6 +1429,7 @@ mod5_count <- bru(
 )
 
 summary(mod5_count)
+logger::log_info("Model 5 fitted; generating {n.samples} posterior predictive draws and validating 2026 estimates.")
 
 #------------------------------------------------------------------------------
 # Predict Growth Factor
@@ -1604,8 +1627,12 @@ val_2026 <- predictions_2026 %>%
 val_2026 %>%
   kable(digits = 3)
 
+logger::log_info("Model 5 validation complete: {nrow(predictions_2026)} EAs; RMSE = {val_2026$RMSE}.")
+
 # Write Results to file
+logger::log_info("Writing 2026 validation predictions to {paste0(pop_path, 'Growth_Factor_Full_Posterior.csv')}.")
 write.csv(predictions_2026, paste0(pop_path, "Growth_Factor_Full_Posterior.csv"), row.names = F)
+logger::log_info("Prediction CSV written; preparing 2026 summaries and diagnostic plots.")
 
 ###############################################################################
 ##############################################################################
@@ -2047,6 +2074,7 @@ ggplot(plot_data_rural_urban, aes(x = Variable, y = Value, fill = ADM_STATUS)) +
 ########## DISAGREGATE 2026 PREDICTIONS TO GRIDCELL #############################
 
 # load covariates
+logger::log_info("Loading grid covariates and raster template for 2026 household disaggregation.")
 pred_covs <- read_feather(paste0(input_path, "Malawi_covs_stack_2024.feather"))
 r1 <- rast(paste0(input_path, "country_raster.tif"))
 
@@ -2058,6 +2086,7 @@ pred_covs <- pred_covs %>%
 pred_covs_2026 <- pred_covs %>%
   inner_join(prediction_summary_2026, by = "cluster_id")
 
+logger::log_info("Disaggregating household predictions across {nrow(pred_covs_2026)} matched grid rows.")
 # Calculate building weight
 pred_covs_2026 <- pred_covs_2026 %>%
   group_by(EA_CODE.x) %>%
@@ -2082,6 +2111,7 @@ test <- pred_covs_2026 %>%
 
 # test if estimates match ea totals
 all(round(test$total_grid_estimates) == round(test$predicted_hh_count_2026)) # If TRUE then it matches
+logger::log_info("Grid totals match rounded EA predictions: {all(round(test$total_grid_estimates) == round(test$predicted_hh_count_2026))}.")
 
 ##################################################################################
 ############### EXPORT RASTER TO FILE ##################################
@@ -2095,14 +2125,18 @@ st_crs(pixel_predictions) <- 4326
 # st_write(pixel_predictions, paste0(output_path, "HH_Estimates_2026.gpkg"), append = T)
 
 # Rasterize predictions and export to file
+logger::log_info("Rasterizing 2026 household estimates.")
 pred_raster <- rasterize(pixel_predictions, r1, field = "grid_hh_estimates_2026")
 plot(pred_raster)
 
 # export
+logger::log_info("Writing household raster to {output_path}HH_Estimates_2026.tif.")
 writeRaster(pred_raster,
   paste0(output_path, "HH_Estimates_2026.tif"),
   overwrite = TRUE, names = "HH_Count"
 )
+
+logger::log_info("Full posterior growth-factor workflow complete; household raster written successfully.")
 
 ################## END OF SCRIPT #############################################
 ############################################################################
