@@ -871,7 +871,7 @@ summary(dist(coords)) # summarizes the Euclidean distance between points in the 
 
 
 # build non-convex hull mesh
-non_convex_bdry <- inla.nonconvex.hull(coords, -0.03, -0.05, resolution = c(100, 100))
+non_convex_bdry <- fmesher::fm_nonconvex_hull(coords, -0.03, -0.05, resolution = c(100, 100))
 mesh <- fmesher::fm_mesh_2d(
   boundary = non_convex_bdry, max.edge = c(0.1, 1),
   offset = c(0.05, 1),
@@ -1282,7 +1282,7 @@ summary(dist(coords)) # summarizes the Euclidean distance between points in the 
 
 # build non-convex hull mesh ,cg note had to add fmesher thing again a couple
 # of times in this file
-non_convex_bdry <- inla.nonconvex.hull(coords, -0.03, -0.05, resolution = c(100, 100))
+non_convex_bdry <- fmesher::fm_nonconvex_hull(coords, -0.03, -0.05, resolution = c(100, 100))
 mesh <- fmesher::fm_mesh_2d(
   boundary = non_convex_bdry, max.edge = c(0.1, 1),
   offset = c(0.05, 1),
