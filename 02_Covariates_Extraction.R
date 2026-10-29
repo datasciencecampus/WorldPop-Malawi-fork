@@ -17,9 +17,11 @@ output_path <- "Output_Data/"
 
 
 # Load dataset ------------------------------------------------------------
+logger::log_info("Starting covariate extraction; loading EA boundaries, survey summaries and raster template.")
 ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use_Corrected.shp"))
 pop_data <- read.csv(file.path(input_path, "summarized_survey_data.csv"))
 r1 <- rast(file.path(bcount_path_2018, "MOS_MLW_buildings_count_BCB_gl_100m_v1_1.tif"))
+logger::log_info("Loaded {nrow(ea)} EA boundary rows and {nrow(pop_data)} survey summary rows.")
 
 # check names of variables in ea shapefile
 names(ea)
@@ -61,7 +63,9 @@ bcount_2018 <- rast(paste0(bcount_path_2018, c(bcount_rasters_list)))
 # it does a percent of the pixel falling in an EA - we want the total
 tic()
 
+logger::log_info("Extracting 2018 building-count sums from {length(bcount_rasters_list)} rasters across {nrow(ea)} EAs.")
 bcount_2018_extract <- exactextractr::exact_extract(bcount_2018, ea, fun = "sum")
+logger::log_info("2018 building-count extraction complete.")
 
 toc()
 
@@ -89,7 +93,9 @@ raster_2018_covariates <- rast(paste0(covs_path_2018, c(raster_list)))
 # Extract rasters using their mean values - you want the average distance to a water body
 tic()
 
+logger::log_info("Extracting 2018 covariate means from {length(raster_list)} rasters.")
 raster_2018_extract <- exactextractr::exact_extract(raster_2018_covariates, ea, fun = "mean")
+logger::log_info("2018 covariate extraction complete; preparing variable names and EA joins.")
 
 toc()
 
@@ -107,6 +113,7 @@ var_names <- cbind(var_names, var_names2) %>%
   as_tibble()
 
 # Export names
+logger::log_info("Writing 2018 covariate names to {output_path}var_names_2018.csv.")
 write.csv(var_names, paste0(output_path, "var_names_2018.csv"))
 
 ###############################################################################
@@ -151,7 +158,9 @@ ea_2018 <- ea_2018 %>%
   dplyr::select(-starts_with(c("x", "geometry")), starts_with("x"))
 
 # Export to file
+logger::log_info("Writing {nrow(ea_2018)} EA rows to {output_path}Malawi_2018_data.csv.")
 write.csv(ea_2018, paste0(output_path, "Malawi_2018_data.csv"), row.names = F)
+logger::log_info("2018 covariate extraction and export complete.")
 
 ################## END OF COVARIATES EXTRACTION FOR 2018 ######################
 ###############################################################################
@@ -190,7 +199,9 @@ bcount_2024 <- rast(paste0(bcount_path_2024, c(bcount_rasters_list)))
 # Extract rasters using their sum values
 tic()
 
+logger::log_info("Extracting 2024 building-count sums from {length(bcount_rasters_list)} rasters across {nrow(ea)} EAs.")
 bcount_2024_extract <- exactextractr::exact_extract(bcount_2024, ea, fun = "sum")
+logger::log_info("2024 building-count extraction complete.")
 
 toc()
 
@@ -219,7 +230,9 @@ raster_2024_covariates <- rast(paste0(covs_path_2024, c(raster_list)))
 # Extract rasters using their mean values
 tic()
 
+logger::log_info("Extracting 2024 covariate means from {length(raster_list)} rasters.")
 raster_2024_extract <- exactextractr::exact_extract(raster_2024_covariates, ea, fun = "mean")
+logger::log_info("2024 covariate extraction complete; preparing variable names and EA joins.")
 
 toc()
 
@@ -237,6 +250,7 @@ var_names <- cbind(var_names, var_names2) %>%
   as_tibble()
 
 # Export names
+logger::log_info("Writing 2024 covariate names to {output_path}var_names_2024.csv.")
 write.csv(var_names, paste0(output_path, "var_names_2024.csv"))
 
 ###############################################################################
@@ -274,7 +288,9 @@ ea_2024 <- ea_2024 %>%
   select(-starts_with(c("x", "geometry")), starts_with("x"))
 
 # Export to file
+logger::log_info("Writing {nrow(ea_2024)} EA rows to {output_path}Malawi_2024_data.csv.")
 write.csv(ea_2024, paste0(output_path, "Malawi_2024_data.csv"), row.names = F)
+logger::log_info("2024 covariate extraction and export complete.")
 
 ################## END OF COVARIATES EXTRACTION FOR 2024 ######################
 ###############################################################################
@@ -308,7 +324,9 @@ bcount_2026 <- rast(paste0(bcount_path_2026, c(bcount_rasters_list)))
 # Extract rasters using their sum values
 tic()
 
+logger::log_info("Extracting 2026 building-count sums from {length(bcount_rasters_list)} rasters across {nrow(ea)} EAs.")
 bcount_2026_extract <- exactextractr::exact_extract(bcount_2026, ea, fun = "sum")
+logger::log_info("2026 building-count extraction complete.")
 
 toc()
 
@@ -335,7 +353,9 @@ raster_2026_covariates <- rast(paste0(covs_path_2026, c(raster_list)))
 # Extract rasters using their mean values
 tic()
 
+logger::log_info("Extracting 2026 covariate means from {length(raster_list)} rasters.")
 raster_2026_extract <- exactextractr::exact_extract(raster_2026_covariates, ea, fun = "mean")
+logger::log_info("2026 covariate extraction complete; preparing variable names and EA joins.")
 
 toc()
 
@@ -353,6 +373,7 @@ var_names <- cbind(var_names, var_names2) %>%
   as_tibble()
 
 # Export names
+logger::log_info("Writing 2026 covariate names to {output_path}var_names_2026.csv.")
 write.csv(var_names, paste0(output_path, "var_names_2026.csv"))
 
 ###############################################################################
@@ -390,7 +411,9 @@ ea_2026 <- ea_2026 %>%
   select(-starts_with(c("x", "geometry")), starts_with("x"))
 
 # Export to file
+logger::log_info("Writing {nrow(ea_2026)} EA rows to {output_path}Malawi_2026_data.csv.")
 write.csv(ea_2026, paste0(output_path, "Malawi_2026_data.csv"), row.names = F)
+logger::log_info("Covariate extraction complete; all three annual EA datasets written successfully.")
 
 ###################################################################################################
 ############################### END OF SCRIPT ######################################################

@@ -15,6 +15,7 @@ shapefile_path <- "Data/Shapefiles/"
 bcount_path_2018 <- "Data/Covariates/Buildings_2018/"
 
 # load rasters - you use the google because it has higher building counts
+logger::log_info("Starting 2018 prediction-grid stack; loading building-count and administrative rasters.")
 google_v2_5 <- rast(paste0(bcount_path_2018, "MOS_MLW_buildings_count_2018_glv2_5_t0_5_C_100m_v1.tif"))
 rural_urban <- rast(file.path(input_path, "rural_urban_raster.tif"))
 country <- rast(file.path(input_path, "country_raster.tif"))
@@ -58,6 +59,7 @@ tic()
 # It stacks rasters by batch_size and then removes any rows that don't have google
 # building counts. This is to reduce dimentionally of the rasters
 for (i in seq(1, length(bcount_list), batch_size)) {
+  logger::log_info("2018 building/admin raster batch: {i}-{min(i + batch_size - 1, length(bcount_list))} of {length(bcount_list)} layers.")
   batch_covs <- bcount_list[i:min(i + batch_size - 1, length(bcount_list))]
 
   # Load batch of covariate rasters
@@ -76,6 +78,7 @@ for (i in seq(1, length(bcount_list), batch_size)) {
   # Write processed covariate values to a feather file
   feather_output_path <- paste0(output_path, "Processed_bcount_2018_", i, "_to_", min(i + batch_size - 1, length(bcount_list)), ".feather")
   feather::write_feather(covs_raster_values, feather_output_path)
+  logger::log_info("2018 building/admin batch saved: {nrow(covs_raster_values)} settled grid rows to {feather_output_path}.")
 
   # Free up memory
   rm(bcount_raster, covs_raster_values)
@@ -98,6 +101,7 @@ pattern <- "Processed_bcount_2018_.*\\.feather$"
 myfiles <- dir(output_path, pattern = pattern)
 myfiles
 
+logger::log_info("Combining {length(myfiles)} saved 2018 building/admin batches.")
 stack_values <- myfiles %>%
   map(function(x) read_feather(file.path(output_path, x))) %>%
   reduce(cbind)
@@ -112,6 +116,7 @@ toc()
 
 process_rasters_list <- list.files(path = covs_path_2018, pattern = ".tif$", full.names = TRUE)
 process_rasters_list
+logger::log_info("Processing {length(process_rasters_list)} covariate rasters for the 2018 grid.")
 
 # Define batch size
 batch_size <- 10
@@ -121,6 +126,7 @@ tic()
 # Loop through covariates in batches - it does the same for the covariates as it did
 # for the building counts - removing rows that don't have a building count in the google_v2_5 raster
 for (i in seq(1, length(process_rasters_list), batch_size)) {
+  logger::log_info("2018 covariate raster batch: {i}-{min(i + batch_size - 1, length(process_rasters_list))} of {length(process_rasters_list)} layers.")
   batch_covs <- process_rasters_list[i:min(i + batch_size - 1, length(process_rasters_list))]
 
   # Load batch of covariate rasters
@@ -138,6 +144,7 @@ for (i in seq(1, length(process_rasters_list), batch_size)) {
   # Write processed covariate values to a feather file
   feather_output_path <- paste0(output_path, "Processed_Covariates_2018_", i, "_to_", min(i + batch_size - 1, length(process_rasters_list)), ".feather")
   feather::write_feather(covs_raster_values, feather_output_path)
+  logger::log_info("2018 covariate batch saved: {nrow(covs_raster_values)} settled grid rows to {feather_output_path}.")
 
   # Free up memory
   rm(covs_raster, covs_raster_values)
@@ -155,6 +162,7 @@ pattern <- "Processed_Covariates_2018_.*\\.feather$"
 myfiles <- dir(output_path, pattern = pattern)
 myfiles
 
+logger::log_info("Combining {length(myfiles)} saved 2018 covariate batches.")
 raster_values <- myfiles %>%
   map(function(x) read_feather(file.path(output_path, x))) %>%
   reduce(cbind)
@@ -165,6 +173,7 @@ toc()
 # Rename variables ----------------------------------------------------
 
 # load variable names
+logger::log_info("Applying 2018 covariate names from {output_path}var_names_2018.csv.")
 predictor_names <- read.csv(paste0(output_path, "var_names_2018.csv"))
 
 # Remove only the first occurrence of "mean." from the var_names column
@@ -185,6 +194,7 @@ names(raster_values) <- sapply(names(raster_values), function(name) {
 # Add Building Count and Coordinate ---------------------------------------
 
 # Read raster and get xy values
+logger::log_info("Extracting 2018 building counts and grid-cell coordinates.")
 google_v2_5 <- rast(paste0(bcount_path_2018, "MOS_MLW_buildings_count_2018_glv2_5_t0_5_C_100m_v1.tif"))
 
 # Get building count values
@@ -222,6 +232,7 @@ prediction_covs <- prediction_covs %>%
 # rasterization
 
 # Read EA shapefiles and join to data
+logger::log_info("Adding administrative attributes to {nrow(prediction_covs)} retained 2018 grid rows.")
 ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use_Corrected.shp"))
 
 # create unique id for each ea
@@ -272,7 +283,9 @@ prediction_covs1 <- prediction_covs1 %>%
 
 
 # Export data to file
+logger::log_info("Writing {nrow(prediction_covs1)} rows and {ncol(prediction_covs1)} columns to {output_path}Malawi_covs_stack_2018.feather.")
 write_feather(prediction_covs1, paste0(output_path, "Malawi_covs_stack_2018.feather"))
+logger::log_info("2018 prediction-grid stack complete; Feather file written successfully.")
 
 ################################# END SCRIPT ################################################
 ##########################################################################################

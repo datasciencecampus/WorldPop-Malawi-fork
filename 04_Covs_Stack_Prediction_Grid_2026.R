@@ -17,6 +17,7 @@ shapefile_path <- "Data/Shapefiles/"
 bcount_path_2026 <- "Data/Covariates/Buildings_2026/"
 
 # load rasters
+logger::log_info("Starting 2026 prediction-grid stack; loading building-count and administrative rasters.")
 google_v2_5 <- rast(paste0(bcount_path_2026, "mwi_buildings_count_2023_glv2_5_t0_5_C_100m_v1.tif"))
 rural_urban <- rast(file.path(input_path, "rural_urban_raster.tif"))
 country <- rast(file.path(input_path, "country_raster.tif"))
@@ -34,11 +35,13 @@ PIB_total_area_google <- rast(paste0(bcount_path_2026, "mwi_buildings_total_area
 # The rasterized admin variables do not have the same extent with the
 # Building footprints for 2026. We will project them to google_v2_5
 
+logger::log_info("Aligning administrative rasters to the 2026 building-count grid.")
 district <- project(district, google_v2_5, method = "near")
 rural_urban <- project(rural_urban, google_v2_5, method = "near")
 ea <- project(ea, google_v2_5, method = "near")
 region <- project(region, google_v2_5, method = "near")
 country <- project(country, google_v2_5, method = "near")
+logger::log_info("2026 administrative raster alignment complete.")
 
 # Check again whether it would stack
 stack3 <- c(district, rural_urban, ea, google_v2_5)
@@ -76,6 +79,7 @@ tic()
 
 # Loop through covariates in batches
 for (i in seq(1, length(bcount_list), batch_size)) {
+  logger::log_info("2026 building/admin raster batch: {i}-{min(i + batch_size - 1, length(bcount_list))} of {length(bcount_list)} layers.")
   batch_covs <- bcount_list[i:min(i + batch_size - 1, length(bcount_list))]
 
   # Load batch of covariate rasters
@@ -93,6 +97,7 @@ for (i in seq(1, length(bcount_list), batch_size)) {
   # Write processed covariate values to a feather file
   feather_output_path <- paste0(output_path, "Processed_bcount_2026_", i, "_to_", min(i + batch_size - 1, length(bcount_list)), ".feather")
   feather::write_feather(covs_raster_values, feather_output_path)
+  logger::log_info("2026 building/admin batch saved: {nrow(covs_raster_values)} settled grid rows to {feather_output_path}.")
 
   # Free up memory
   rm(bcount_raster, covs_raster_values)
@@ -115,6 +120,7 @@ pattern <- "Processed_bcount_2026_.*\\.feather$"
 myfiles <- dir(output_path, pattern = pattern)
 myfiles
 
+logger::log_info("Combining {length(myfiles)} saved 2026 building/admin batches.")
 stack_values <- myfiles %>%
   map(function(x) read_feather(file.path(output_path, x))) %>%
   reduce(cbind)
@@ -129,6 +135,7 @@ toc()
 
 process_rasters_list <- list.files(path = covs_path_2026, pattern = ".tif$", full.names = TRUE)
 process_rasters_list
+logger::log_info("Processing {length(process_rasters_list)} covariate rasters for the 2026 grid.")
 
 # Define batch size
 batch_size <- 10
@@ -137,6 +144,7 @@ tic()
 
 # Loop through covariates in batches
 for (i in seq(1, length(process_rasters_list), batch_size)) {
+  logger::log_info("2026 covariate raster batch: {i}-{min(i + batch_size - 1, length(process_rasters_list))} of {length(process_rasters_list)} layers.")
   batch_covs <- process_rasters_list[i:min(i + batch_size - 1, length(process_rasters_list))]
 
   # Load batch of covariate rasters
@@ -154,6 +162,7 @@ for (i in seq(1, length(process_rasters_list), batch_size)) {
   # Write processed covariate values to a feather file
   feather_output_path <- paste0(output_path, "Processed_Covariates_2026_", i, "_to_", min(i + batch_size - 1, length(process_rasters_list)), ".feather")
   feather::write_feather(covs_raster_values, feather_output_path)
+  logger::log_info("2026 covariate batch saved: {nrow(covs_raster_values)} settled grid rows to {feather_output_path}.")
 
   # Free up memory
   rm(covs_raster, covs_raster_values)
@@ -171,6 +180,7 @@ pattern <- "Processed_Covariates_2026_.*\\.feather$"
 myfiles <- dir(output_path, pattern = pattern)
 myfiles
 
+logger::log_info("Combining {length(myfiles)} saved 2026 covariate batches.")
 raster_values <- myfiles %>%
   map(function(x) read_feather(file.path(output_path, x))) %>%
   reduce(cbind)
@@ -181,6 +191,7 @@ toc()
 # Rename variables ----------------------------------------------------
 
 # load variable names
+logger::log_info("Applying 2026 covariate names from {output_path}var_names_2026.csv.")
 predictor_names <- read.csv(paste0(output_path, "var_names_2026.csv"))
 
 # Remove only the first occurrence of "mean." from the var_names column
@@ -201,6 +212,7 @@ names(raster_values) <- sapply(names(raster_values), function(name) {
 # Add Building Count and Coordinate ---------------------------------------
 
 # Read raster and get xy values
+logger::log_info("Extracting 2026 building counts and grid-cell coordinates.")
 google_v2_5 <- rast(paste0(bcount_path_2026, "mwi_buildings_count_2023_glv2_5_t0_5_C_100m_v1.tif"))
 
 # Get values
@@ -232,6 +244,7 @@ prediction_covs <- prediction_covs %>%
 ## Add Shapefile variables
 
 # Read EA shapefiles and join to data
+logger::log_info("Adding administrative attributes to {nrow(prediction_covs)} retained 2026 grid rows.")
 ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use_Corrected.shp"))
 
 # create unique id for each ea
@@ -282,7 +295,9 @@ prediction_covs1 <- prediction_covs1 %>%
 
 
 # Export data to file
+logger::log_info("Writing {nrow(prediction_covs1)} rows and {ncol(prediction_covs1)} columns to {output_path}Malawi_covs_stack_2026.feather.")
 write_feather(prediction_covs1, paste0(output_path, "Malawi_covs_stack_2026.feather"))
+logger::log_info("2026 prediction-grid stack complete; Feather file written successfully.")
 
 ################################# END SCRIPT ################################################
 ##########################################################################################
