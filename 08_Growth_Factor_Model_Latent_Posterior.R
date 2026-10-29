@@ -14,6 +14,7 @@ library(inlabru)
 library(feather)
 library(tidyverse)
 library(conflicted)
+
 # conflicted... see code put in on Friday - except we fixed it differently, how?
 # check that code to the orig to see what changed
 set.seed(1234) # set seed for reproducibility
@@ -22,11 +23,10 @@ options(scipen = 999) # turn off scientific notation for all variables
 # options(digits = 3)
 
 # Specify Drive Path
-drive_path <- "D:/Malawi/"
-input_path <- paste0(drive_path, "Output_Data/")
-output_path <- paste0(drive_path, "Output_Data/Predicted_Estimates/")
-shapefile_path <- paste0(drive_path, "Data/Shapefiles/")
-pop_path <- paste0(drive_path, "Output_data/Predicted_Estimates")
+input_path <- "Output_Data/"
+output_path <- "Output_Data/Predicted_Estimates/"
+shapefile_path <- "Data/Shapefiles/"
+pop_path <- "Output_Data/Predicted_Estimates"
 
 #####################################################################################
 #####################################################################################
@@ -65,7 +65,7 @@ summary(pop_data$hh_count_2018) # There are 45 EAs without hh count for 2018
 
 # Filter those EAs and check them
 eas_na <- pop_data %>%
-  filter(is.na(hh_count_2018))
+  dplyr::filter(is.na(hh_count_2018))
 
 # For the purpose of this work we will replace the hh count with 0 in those EAs ,cg because this approach is multiplicative and if leave as 0 will not get growth, decision to be made by group
 pop_data <- pop_data %>%
@@ -99,7 +99,7 @@ summary(pop_data$growth_factor)
 # filter growth factor which is NA
 EA_data <- pop_data %>%
   drop_na(growth_factor) %>% # drop NA
-  filter(!is.infinite(growth_factor)) # drop Infinity values
+  dplyr::filter(!is.infinite(growth_factor)) # drop Infinity values
 
 # check summary stats
 summary(EA_data$growth_factor) # Summary of growth factor ,any place above 1 there has been growth, 1st quantile is 1l some have grown by > 5 times with factor 1.58
@@ -140,7 +140,7 @@ ggplot(data = EA_data, aes(x = hh_count_2024)) +
 
 # Remove HH count below 10, cg from survey data any ea hh count less than 10
 EA_data <- EA_data %>%
-  filter(hh_count_2024 > 10)
+  dplyr::filter(hh_count_2024 > 10)
 
 # plot HH Count
 ggplot(data = EA_data, aes(x = hh_count_2024)) +
@@ -400,7 +400,7 @@ prediction_summary_2024 %>%
 #------------------------------------------------------------------------------
 predictions_2024 <- prediction_summary_2024 %>%
   drop_na(hh_count_2024) %>%
-  filter(hh_count_2024 > 17) %>%
+  dplyr::filter(hh_count_2024 > 17) %>%
   mutate(residual = hh_count_2024 - predicted_hh_count_2024)
 
 
@@ -608,7 +608,7 @@ prediction_summary_2024 %>%
 #------------------------------------------------------------------------------
 predictions_2024 <- prediction_summary_2024 %>%
   drop_na(hh_count_2024) %>%
-  filter(hh_count_2024 > 10) %>% # cg change 17 to 10
+  dplyr::filter(hh_count_2024 > 10) %>% # cg change 17 to 10
   mutate(residual = hh_count_2024 - predicted_hh_count_2024)
 
 
@@ -840,7 +840,7 @@ prediction_summary_2024 %>%
 #------------------------------------------------------------------------------
 predictions_2024 <- prediction_summary_2024 %>%
   drop_na(hh_count_2024) %>%
-  filter(hh_count_2024 > 10) %>% # cg changing from 17 to 10
+  dplyr::filter(hh_count_2024 > 10) %>% # cg changing from 17 to 10
   mutate(residual = hh_count_2024 - predicted_hh_count_2024)
 
 
@@ -872,7 +872,7 @@ summary(dist(coords)) # summarizes the Euclidean distance between points in the 
 
 
 # build non-convex hull mesh
-non_convex_bdry <- inla.nonconvex.hull(coords, -0.03, -0.05, resolution = c(100, 100))
+non_convex_bdry <- fmesher::fm_nonconvex_hull(coords, -0.03, -0.05, resolution = c(100, 100))
 mesh <- fmesher::fm_mesh_2d(
   boundary = non_convex_bdry, max.edge = c(0.1, 1),
   offset = c(0.05, 1),
@@ -1076,7 +1076,7 @@ prediction_summary_2024 %>%
 #------------------------------------------------------------------------------
 predictions_2024 <- prediction_summary_2024 %>%
   drop_na(hh_count_2024) %>%
-  filter(hh_count_2024 > 10) %>% # changed from 17 to 10
+  dplyr::filter(hh_count_2024 > 10) %>% # changed from 17 to 10
   mutate(residual = hh_count_2024 - predicted_hh_count_2024)
 
 
@@ -1196,7 +1196,7 @@ summary(pop_data$growth_factor)
 # 2026, so can't use in model
 EA_data <- pop_data %>%
   drop_na(growth_factor) %>% # drop NA
-  filter(!is.infinite(growth_factor)) # drop Infinity values
+  dplyr::filter(!is.infinite(growth_factor)) # drop Infinity values
 
 # check summary stats ,cg just those with 2026 data, see the difference from
 # all the areas? examine them compared to whole thing, doesn't seem to be a step
@@ -1283,7 +1283,7 @@ summary(dist(coords)) # summarizes the Euclidean distance between points in the 
 
 # build non-convex hull mesh ,cg note had to add fmesher thing again a couple
 # of times in this file
-non_convex_bdry <- inla.nonconvex.hull(coords, -0.03, -0.05, resolution = c(100, 100))
+non_convex_bdry <- fmesher::fm_nonconvex_hull(coords, -0.03, -0.05, resolution = c(100, 100))
 mesh <- fmesher::fm_mesh_2d(
   boundary = non_convex_bdry, max.edge = c(0.1, 1),
   offset = c(0.05, 1),
@@ -1506,7 +1506,7 @@ val_2026 %>%
   kable(digits = 3)
 # cg result mae 59.719, coverage 62%
 # Write Results to file
-write.csv(predictions_2026, paste0(pop_path, "Growth_Factor_Full_Posterior.csv"), row.names = F)
+write.csv(predictions_2026, paste0(pop_path, "Growth_Factor_Latent_Posterior.csv"), row.names = F)
 # cg work out where this writes to, as hasn't gone to right place,where is
 # pop_path going?
 ###############################################################################

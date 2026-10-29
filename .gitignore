@@ -1,3 +1,2 @@
 # Ignore data folder
-Data/
-Output_Data/
+*Data/

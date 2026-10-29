@@ -14,16 +14,30 @@ library(inlabru)
 library(feather)
 library(tidyverse)
 
+# had to add this one in
+library(sn)
+
 set.seed(1234) # set seed for reproducibility
 
 options(scipen = 999) # turn off scientific notation for all variables
 # options(digits = 3)
 
 # Specify Drive Path
-drive_path <- "D:/Malawi/"
-input_path <- paste0(drive_path, "Output_Data/")
-output_path <- paste0(drive_path, "Output_Data/Predicted_Estimates/")
-shapefile_path <- paste0(drive_path, "Data/Shapefiles/")
+# drive_path <- "D:/Malawi/"
+input_path <- "Output_Data/"
+output_path <- "Output_Data/Predicted_Estimates/"
+shapefile_path <- "Data/Shapefiles/"
+pop_path <- "Output_Data/Predicted_Estimates"
+
+# TODO: REMOVE Only needed if you can't download INLA
+# url <- "https://inla.r-inla-download.org/R/stable/bin/windows/contrib/4.6/PACKAGES"
+# download.file(url, tempfile(), method = "libcurl")
+
+# options(repos = c(
+#   CRAN = "https://cloud.r-project.org",
+#   INLA = "https://inla.r-inla-download.org/R/stable"
+# ))
+# install.packages("INLA", dependencies = TRUE)
 
 #####################################################################################
 #####################################################################################
@@ -248,6 +262,7 @@ summary(mod1_count)
 # Get the precision (variance parameter) and convert to std deviation
 sd <- sqrt(1 / mod1_count$summary.hyperpar["Precision for the lognormal observations", "mean"])
 
+
 # Generate samples
 mu_samples <- generate(
   mod1_count,
@@ -258,7 +273,6 @@ mu_samples <- generate(
   seed = 2,
   num.threads = "1"
 )
-
 # Simulate Posterior Predictive growth_factor for Training Data
 growth_factor_draws <- map_dfc(
   1:n.samples,
@@ -917,8 +931,11 @@ summary(dist(coords)) # summarizes the Euclidean distance between points in the 
 
 
 # build non-convex hull mesh
-non_convex_bdry <- inla.nonconvex.hull(coords, -0.03, -0.05, resolution = c(100, 100))
-mesh <- fm_mesh_2d_inla(
+# TODO: inla.nonconvex.hull depreciated in v23.08.18, either backdate or use
+# recommended fmesher::fm_nonconvex_hull()
+# non_convex_bdry <- inla.nonconvex.hull(coords, -0.03, -0.05, resolution = c(100, 100))
+non_convex_bdry <- fmesher::fm_nonconvex_hull(coords, -0.03, -0.05, resolution = c(100, 100))
+mesh <- fmesher::fm_mesh_2d_inla(
   boundary = non_convex_bdry, max.edge = c(0.1, 1),
   offset = c(0.05, 1),
   cutoff = 0.003
@@ -1343,8 +1360,8 @@ summary(dist(coords)) # summarizes the Euclidean distance between points in the 
 
 
 # build non-convex hull mesh
-non_convex_bdry <- inla.nonconvex.hull(coords, -0.03, -0.05, resolution = c(100, 100))
-mesh <- fm_mesh_2d_inla(
+non_convex_bdry <- fmesher::fm_nonconvex_hull(coords, -0.03, -0.05, resolution = c(100, 100))
+mesh <- fmesher::fm_mesh_2d_inla(
   boundary = non_convex_bdry, max.edge = c(0.1, 1),
   offset = c(0.05, 1),
   cutoff = 0.003
@@ -1586,7 +1603,7 @@ val_2026 %>%
   kable(digits = 3)
 
 # Write Results to file
-# write.csv(predictions_2026, paste0(pop_path, "Growth_Factor_Full_Posterior.csv"), row.names = F)
+write.csv(predictions_2026, paste0(pop_path, "Growth_Factor_Full_Posterior.csv"), row.names = F)
 
 ###############################################################################
 ##############################################################################
@@ -1638,7 +1655,7 @@ plot_data <- predictions_2026 %>%
     values_to = "Value"
   ) %>%
   mutate(
-    Variable = recode(Variable,
+    Variable = dplyr::recode(Variable,
       hh_count_2026 = "Survey 2026 Data",
       predicted_hh_count = "Predictions"
     )
@@ -1956,9 +1973,9 @@ plot_data_rural_urban <- rural_urban %>%
     values_to = "Value"
   ) %>%
   mutate(
-    Variable = recode(Variable,
+    Variable = dplyr::recode(Variable,
       hh_count_2026 = "Survey 2026 Data",
-      predicted_hh_count = "Predictions"
+      predicted_hh_count_2026 = "Predictions"
     )
   )
 
