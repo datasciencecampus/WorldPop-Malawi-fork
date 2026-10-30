@@ -59,10 +59,10 @@ withCallingHandlers(
 
     if (run_growth_model) {
       log_success("Running '08_Growth_Factor_Model_Full_Posterior.R'...")
-      # source("08_Growth_Factor_Model_Full_Posterior.R")
+      source("08_Growth_Factor_Model_Full_Posterior.R")
 
       log_success("Running '08_Growth_Factor_Model_Latent_Posterior.R'...")
-      # source("08_Growth_Factor_Model_Latent_Posterior.R")
+      source("08_Growth_Factor_Model_Latent_Posterior.R")
 
       render_quarto_report("growth_factor_results_report.qmd")
       copy_report(
