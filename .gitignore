@@ -4,3 +4,4 @@
 # Ignore other pipeline outputs
 logs/
 reports/
+*.html
