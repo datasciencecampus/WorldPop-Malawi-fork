@@ -1,7 +1,6 @@
 # Wrapper script to act as a single entry point into the pipeline
 # This will contain all the steps to produce a model.
 
-library(tictoc)
 library(logger)
 
 # ---- initialse logger ----
@@ -75,3 +74,20 @@ withCallingHandlers(
 
 # TODO: RIP Graphs created from growth models and throw them into a Quarto
 # html report. same thing for high level model statistics.
+
+# TODO: integrate config within the individual scripts, front load all data
+# reading
+
+# TODO: The logging messages will have to be checked again for relevance, a
+# problem I can see happening when we integrate the config into the individual
+# files (logging messages currently reference file names directly).
+
+# TODO: Still need to use the config in all the scripts. Need to implement
+# a date system for storing processed data/outputs.
+#  - add timer functions?
+#  - add git commit hash/branch to logs?
+
+# TODO: When running data processing steps + modeling we get an error
+# saying 'run_growth_model' doesn't exist, this is defined at the top of the
+# pipeline. I suspect in 01_data_processing.R where *ALL* variables apart
+# from a named few are deleted includes global variables.
