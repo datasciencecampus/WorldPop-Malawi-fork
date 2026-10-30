@@ -108,44 +108,6 @@ observed count falls between the saved lower and upper estimates.
 
 ::: {.panel-tabset}
 
-### Household Summaries
-
-```{r}
-if (length(prediction_tables)) {
-  ea_values <- bind_rows(prediction_tables) %>%
-    select(.model, hh_count_2026, predicted_hh_count_2026) %>%
-    pivot_longer(
-      cols = c(hh_count_2026, predicted_hh_count_2026),
-      names_to = "Measure",
-      values_to = "Households"
-    ) %>%
-    mutate(Measure = recode(
-      Measure,
-      hh_count_2026 = "Observed 2026",
-      predicted_hh_count_2026 = "Predicted 2026"
-    )) %>%
-    filter(!is.na(Households)) %>%
-    group_by(.model, Measure) %>%
-    summarise(
-      n = n(),
-      Total = sum(Households),
-      Mean = mean(Households),
-      SD = sd(Households),
-      Median = median(Households),
-      Q1 = quantile(Households, 0.25),
-      Q3 = quantile(Households, 0.75),
-      Min = min(Households),
-      Max = max(Households),
-      .groups = "drop"
-    ) %>%
-    rename(Model = .model)
-
-  kable(ea_values, digits = 2, caption = "EA-level household count summaries")
-} else {
-  cat("No EA prediction CSVs were found at the configured paths.")
-}
-```
-
 ### Overall Validation
 
 ```{r}
@@ -186,6 +148,45 @@ if (length(prediction_tables)) {
   cat("EA validation metrics are unavailable until an EA prediction CSV is present.")
 }
 ```
+
+### Household Summaries
+
+```{r}
+if (length(prediction_tables)) {
+  ea_values <- bind_rows(prediction_tables) %>%
+    select(.model, hh_count_2026, predicted_hh_count_2026) %>%
+    pivot_longer(
+      cols = c(hh_count_2026, predicted_hh_count_2026),
+      names_to = "Measure",
+      values_to = "Households"
+    ) %>%
+    mutate(Measure = recode(
+      Measure,
+      hh_count_2026 = "Observed 2026",
+      predicted_hh_count_2026 = "Predicted 2026"
+    )) %>%
+    filter(!is.na(Households)) %>%
+    group_by(.model, Measure) %>%
+    summarise(
+      n = n(),
+      Total = sum(Households),
+      Mean = mean(Households),
+      SD = sd(Households),
+      Median = median(Households),
+      Q1 = quantile(Households, 0.25),
+      Q3 = quantile(Households, 0.75),
+      Min = min(Households),
+      Max = max(Households),
+      .groups = "drop"
+    ) %>%
+    rename(Model = .model)
+
+  kable(ea_values, digits = 2, caption = "EA-level household count summaries")
+} else {
+  cat("No EA prediction CSVs were found at the configured paths.")
+}
+```
+
 
 ### Rural/Urban Validation
 
