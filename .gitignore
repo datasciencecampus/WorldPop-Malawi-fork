@@ -1,2 +1,6 @@
 # Ignore data folder
 *Data/
+
+# Ignore other pipeline outputs
+logs/
+reports/
