@@ -20,7 +20,7 @@ jobs:
       # changelog-enforcer v3.7
       - uses: dangoslen/changelog-enforcer@8b5e9dc3121363bb7c0115f8533404d92af382de
         with:
-          changeLogPath: "docs/CHANGELOG.md"
+          changeLogPath: "CHANGELOG.md"
 
   # TODO: Find equivalent for R
   # pre-commit:
