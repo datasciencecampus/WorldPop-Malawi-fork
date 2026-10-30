@@ -215,6 +215,108 @@ if (length(prediction_tables)) {
 
 :::
 
+### Diagnostic Plots
+
+These plots recreate the model scripts' EA diagnostics from the saved prediction
+CSVs, without refitting either model. Vertical bars show the saved prediction
+intervals; the dashed line marks equal observed and predicted counts.
+
+```{r}
+ea_plot_data <- bind_rows(prediction_tables)
+if (nrow(ea_plot_data)) {
+  ea_plot_data <- ea_plot_data %>%
+    filter(is.finite(hh_count_2026), is.finite(predicted_hh_count_2026)) %>%
+    rename(Model = .model)
+
+  ea_distributions <- ea_plot_data %>%
+    select(Model, hh_count_2026, predicted_hh_count_2026) %>%
+    pivot_longer(
+      cols = c(hh_count_2026, predicted_hh_count_2026),
+      names_to = "Measure",
+      values_to = "Households"
+    ) %>%
+    mutate(Measure = recode(
+      Measure,
+      hh_count_2026 = "Observed 2026",
+      predicted_hh_count_2026 = "Predicted 2026"
+    ))
+}
+```
+
+::: {.panel-tabset}
+
+#### Observed vs Predicted
+
+```{r}
+#| fig-width: 10
+#| fig-height: 5
+#| fig-cap: "Observed and predicted 2026 EA household counts with prediction intervals."
+if (nrow(ea_plot_data)) {
+  ggplot(ea_plot_data, aes(x = hh_count_2026, y = predicted_hh_count_2026)) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "#219ebc") +
+    geom_errorbar(
+      aes(ymin = hh_lower_2026, ymax = hh_upper_2026),
+      width = 0, alpha = 0.4, color = "#264653", na.rm = TRUE
+    ) +
+    geom_point(size = 2, alpha = 0.7) +
+    facet_wrap(vars(Model), nrow = 1) +
+    labs(x = "Observed households", y = "Predicted households") +
+    theme_minimal(base_size = 12)
+} else {
+  cat("No complete EA predictions are available for plotting.")
+}
+```
+
+#### Household Count Boxplots
+
+```{r}
+#| fig-width: 10
+#| fig-height: 5
+#| fig-cap: "Observed and predicted household count distributions by model."
+if (nrow(ea_plot_data)) {
+  ggplot(ea_distributions, aes(x = Measure, y = Households, fill = Measure)) +
+    geom_boxplot(width = 0.6, alpha = 0.7) +
+    facet_wrap(vars(Model), nrow = 1) +
+    scale_fill_manual(values = c("Observed 2026" = "#2a9d8f", "Predicted 2026" = "#e76f51")) +
+    labs(x = NULL, y = "Household count") +
+    theme_minimal(base_size = 12) +
+    theme(legend.position = "none")
+} else {
+  cat("No complete EA predictions are available for plotting.")
+}
+```
+
+#### Household Count Densities
+
+```{r}
+#| fig-width: 10
+#| fig-height: 5
+#| fig-cap: "Density comparison of observed and predicted household counts by model."
+if (nrow(ea_plot_data)) {
+  density_data <- ea_distributions %>%
+    group_by(Model, Measure) %>%
+    filter(n() >= 2, n_distinct(Households) > 1) %>%
+    ungroup()
+
+  if (nrow(density_data)) {
+    ggplot(density_data, aes(x = Households, fill = Measure, color = Measure)) +
+      geom_density(alpha = 0.3) +
+      facet_wrap(vars(Model), nrow = 1) +
+      scale_fill_manual(values = c("Observed 2026" = "#2a9d8f", "Predicted 2026" = "#e76f51")) +
+      scale_color_manual(values = c("Observed 2026" = "#2a9d8f", "Predicted 2026" = "#e76f51")) +
+      labs(x = "Household count", y = "Density", fill = NULL, color = NULL) +
+      theme_minimal(base_size = 12) +
+      theme(legend.position = "bottom")
+  } else {
+    cat("Density plots require at least two distinct household counts per group.")
+  }
+} else {
+  cat("No complete EA predictions are available for plotting.")
+}
+```
+
+:::
+
 ## Raster Estimates
 
 Raster totals sum the grid-cell household estimates. Quantiles below are
