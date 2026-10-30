@@ -3,6 +3,9 @@
 
 library(logger)
 
+# helper functions
+source("utils.R")
+
 # ---- initialse logger ----
 run_id <- format(Sys.time(), "%Y%m%d_%H%M%S")
 log_dir <- "logs" # file.path(config$paths$drive_path, "logs")
@@ -56,10 +59,12 @@ withCallingHandlers(
 
     if (run_growth_model) {
       log_success("Running '08_Growth_Factor_Model_Full_Posterior.R'...")
-      source("08_Growth_Factor_Model_Full_Posterior.R")
+      # source("08_Growth_Factor_Model_Full_Posterior.R")
 
       log_success("Running '08_Growth_Factor_Model_Latent_Posterior.R'...")
-      source("08_Growth_Factor_Model_Latent_Posterior.R")
+      # source("08_Growth_Factor_Model_Latent_Posterior.R")
+
+      render_quarto_report("growth_factor_results_report.qmd")
     } else {
       log_warn("Growth Model has been skipped.")
     }
@@ -71,9 +76,6 @@ withCallingHandlers(
     }
   }
 )
-
-# TODO: RIP Graphs created from growth models and throw them into a Quarto
-# html report. same thing for high level model statistics.
 
 # TODO: integrate config within the individual scripts, front load all data
 # reading
