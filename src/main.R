@@ -1,5 +1,6 @@
 # ---
 # file will pull in all parts of the modelling pipeline
+source("load_required_libraries.R")
 source("src/data_processing/data_processing_2.R")
 source("src/quality_assurance/output_summary.R")
 source("utils.R")
@@ -18,6 +19,14 @@ run_log_file <- file.path(log_dir, paste0("pipeline_run_", run_id, ".log"))
 library(logger)
 logger::log_appender(logger::appender_tee(run_log_file))
 logger::log_threshold(logger::INFO)
+
+# ---- Log system and environment information --------------------------------
+sys_info <- get_system_info()
+logger::log_info("Pipeline run started")
+logger::log_info("System and Environment Information:")
+for (i in seq_len(nrow(sys_info))) {
+    logger::log_info("  {sys_info$Component[i]}: {sys_info$Version[i]}")
+}
 
 # ----
 # section 1
@@ -144,6 +153,10 @@ logger::log_info("Run log written: {run_log_file}")
 logger::log_appender(logger::appender_file(run_log_file))
 
 # ---- Render HTML pipeline report -----------------------------------------------
+# NOTE: To test report modifications without running data_processing2,
+#       run: source("run_report_standalone.R")
+#       This uses the most recent pipeline outputs for faster iteration.
+
 tryCatch({
     # Configure Pandoc (checks system PATH, then Quarto install, then common locations)
     setup_pandoc()
@@ -176,9 +189,10 @@ tryCatch({
             transformation_stats_csv  = normalizePath(
                 file.path(qa_output_dir, "data_processing2_transformation_stats.csv"),
                 mustWork = FALSE
-            )
+            ),
+            sys_info             = sys_info
         ),
-        quiet = TRUE
+        quiet = FALSE
     )
     logger::log_info("HTML report written: {report_output_path}")
     browseURL(report_output_path)

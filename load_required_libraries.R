@@ -24,22 +24,26 @@ load_libraries <- function(library_names) {
 required_libraries <- c(
   "car", # Companion to Applied Regression
   "caret", # Classification And REgression Training
+  "dplyr", # data manipulation grammar
   "exactextractr", # zonal statistics of polygons
   "feather", # reading and writing feather files
-  "sf", # package for handling spatial data
+  "ggplot2", # data visualization
+  "glmnet", # Elastic Net, Ridge, Lasso regression
   "gstat", # Spatial and Spatio-Temporal Geostatistical Modelling, Prediction and Simulation
   "haven", # package for import foreign statistical formats
-  "inlabru", # package for Bayesian spatial modelling 
+  # "INLA", # Integrated Nested Laplace Approximation for Bayesian inference
+  "inlabru", # package for Bayesian spatial modelling
   "kableExtra", # for html tables
+  "knitr", # dynamic report generation
   "logger", # used for logging in the pipeline
-  "modelsummary", # used to quickly produce DataFrame summaries 
+  "modelsummary", # used to quickly produce DataFrame summaries
   "nngeo", # nearest neighbour in geospatial
+  "raster", # raster data handling
+  "rmarkdown", # R Markdown document rendering and HTML report generation
+  "sf", # package for handling spatial data
   "spdep", # spatial dependence and weights
   "terra", # package for spatial data analysis
   "tictoc", # package for timing R Scripts
   "tidyverse", # tidyverse
-  "yaml", # used to read in config
+  "yaml" # used to read in config
 )
-
-# Execute code to load (and install) libraries
-load_libraries(required_libraries)

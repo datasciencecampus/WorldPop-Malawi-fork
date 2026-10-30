@@ -275,3 +275,83 @@ setup_pandoc <- function() {
     )
     invisible(NULL)
 }
+
+#' Capture system and pipeline package information.
+#'
+#' @description
+#' Collects comprehensive system environment and package version information
+#' for documentation and reproducibility. Captures R version, operating system,
+#' Git user configuration, and version information for all packages defined
+#' in the pipeline's \code{required_libraries} list.
+#'
+#' Package versions are sourced dynamically from \code{load_required_libraries.R}
+#' to ensure a single source of truth. Packages that are not installed are
+#' silently skipped (no error). The Git username is gracefully handled if Git
+#' is not available or not configured.
+#'
+#' The function is typically called once at pipeline start for logging, and
+#' results are passed to the report rendering for display. This ensures the
+#' report documents exactly which environment the pipeline ran under.
+#'
+#' @return
+#' A data.frame with two character columns:
+#' \itemize{
+#'   \item \code{Component}: Name of the system component or package name
+#'   \item \code{Version}: Version string (e.g., "4.2.1" for R, "1.0.0" for packages)
+#' }
+#' Row 1 is always R version, row 2 is OS, row 3 is Git user,
+#' followed by installed package versions.
+#'
+#' @note
+#' Requires \code{load_required_libraries.R} to be in the current working directory.
+#' This function is called by the pipeline orchestration and is typically not
+#' invoked directly by users.
+#'
+get_system_info <- function() {
+    # R version
+    r_version <- paste0(R.version$major, ".", R.version$minor)
+    
+    # OS
+    os_info <- Sys.info()["sysname"]
+    
+    # Git user
+    git_user <- tryCatch({
+        system("git config user.name", intern = TRUE)
+    }, error = function(e) { "Not available" })
+    if (length(git_user) == 0) git_user <- "Not available"
+    
+    # Load the shared required_libraries list from load_required_libraries.R
+    # (stores in a temporary environment to avoid polluting global namespace)
+    lib_env <- new.env()
+    source("load_required_libraries.R", local = lib_env)
+    required_libraries <- lib_env$required_libraries
+    
+    pkg_info <- data.frame(
+        Component = character(),
+        Version = character(),
+        stringsAsFactors = FALSE
+    )
+    
+    # Add system info
+    pkg_info <- rbind(pkg_info, data.frame(
+        Component = c("R", "OS", "Git user"),
+        Version = c(r_version, os_info, git_user),
+        stringsAsFactors = FALSE
+    ))
+    
+    # Add package versions
+    for (pkg in required_libraries) {
+        tryCatch({
+            pkg_ver <- as.character(packageVersion(pkg))
+            pkg_info <- rbind(pkg_info, data.frame(
+                Component = pkg,
+                Version = pkg_ver,
+                stringsAsFactors = FALSE
+            ))
+        }, error = function(e) {
+            # Package not installed, skip
+        })
+    }
+    
+    return(pkg_info)
+}

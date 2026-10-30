@@ -10,11 +10,15 @@ This is the `ons-compatability-updates` branch, which includes updates for compa
 
 ## Dependencies
 
-To install all required packages, run this in your R console:
+To install all required packages as a one-off setup, run this in your R console:
 
 ``` r
-install.packages(c("tidyverse", "sf", "tictoc", "terra", "exactextractr", "haven", "nngeo", "INLA", "gstat", "spdep", "car", "caret", "kableExtra", "inlabru", "feather", "raster", "glmnet", "yaml", "modelsummary", "logger"))
+source("load_required_libraries.R")
 ```
+
+This will automatically install any missing packages from the `required_libraries` list defined in `load_required_libraries.R`.
+
+**Note:** INLA requires separate installation due to its specific build requirements. 
 
 ## Refactor
 
@@ -36,6 +40,18 @@ This will:
 3. **Compute transformation statistics** (data filtering, EA reassignment, GPS accuracy splits)
 4. **Run parity QA** comparing current outputs against baseline files
 5. **Generate HTML report** showing source data profiles, transformations, QA results, and pipeline logs
+
+#### Testing Report Modifications
+
+To iterate on report design without running the full data processing pipeline, use:
+
+```r
+source("run_report_standalone.R")
+```
+
+This loads your most recent pipeline's outputs and renders the report in seconds, allowing quick testing of report layout and styling changes. 
+
+**Note:** `run_report_standalone.R` is a temporary utility file created during development. It should be **deleted once the pipeline is complete** before sharing or archiving the repository.
 
 ### Current Output
 
