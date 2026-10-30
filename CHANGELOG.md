@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased]
 
 ### Added
+- Model Report that contains validation metrics, metrics to compare outputs and
+visulisations for the model.
+- Added util functions to render quarto html report and copy report to a separate
+folder for storage.
 
 ### Improvements
 

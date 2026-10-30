@@ -1,0 +1,498 @@
+---
+title: "Malawi Growth Factor Model Results"
+subtitle: "Full-posterior and latent-posterior estimates"
+date: today
+date-format: "D MMMM YYYY"
+format:
+  html:
+    embed-resources: true
+    toc: true
+    number-sections: true
+    code-fold: true
+execute:
+  echo: false
+  warning: false
+  message: false
+params:
+  full_csv: "Output_Data/Predicted_EstimatesGrowth_Factor_latent_Posterior.csv"
+  latent_csv: "Output_Data/Predicted_EstimatesGrowth_Factor_Full_Posterior.csv"
+  full_raster: "Output_Data/Predicted_Estimates/HH_Estimates_2026.tif"
+  latent_raster: "Output_Data/Predicted_Estimates/Latent_HH_Estimates_2026.tif"
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(ggplot2)
+  library(knitr)
+  library(terra)
+  library(tidyr)
+})
+
+first_existing <- function(paths) {
+  matches <- paths[file.exists(paths)]
+  if (length(matches)) matches[[1]] else NA_character_
+}
+
+csv_paths <- c(
+  "Full Posterior" = first_existing(params$full_csv),
+  "Latent Posterior" = first_existing(c(
+    params$latent_csv,
+    "Output_Data/Predicted_Estimates/Growth_Factor_Latent_Posterior.csv"
+  ))
+)
+
+raster_paths <- c(
+  "Full Posterior" = first_existing(params$full_raster),
+  "Latent Posterior" = first_existing(params$latent_raster)
+)
+
+required_columns <- c(
+  "hh_count_2026", "predicted_hh_count_2026",
+  "hh_lower_2026", "hh_upper_2026"
+)
+
+prediction_tables <- lapply(names(csv_paths), function(model) {
+  path <- csv_paths[[model]]
+  if (is.na(path)) {
+    return(NULL)
+  }
+
+  data <- read.csv(path, check.names = FALSE)
+  missing_columns <- setdiff(required_columns, names(data))
+  if (length(missing_columns)) {
+    stop("CSV is missing required columns: ", paste(missing_columns, collapse = ", "))
+  }
+  data$.model <- model
+  data
+})
+names(prediction_tables) <- names(csv_paths)
+prediction_tables <- Filter(Negate(is.null), prediction_tables)
+
+rasters <- lapply(raster_paths, function(path) {
+  if (is.na(path)) NULL else terra::rast(path)
+})
+names(rasters) <- names(raster_paths)
+rasters <- Filter(Negate(is.null), rasters)
+
+artifact_inventory <- tibble(
+  Model = rep(names(csv_paths), each = 2),
+  Artifact = rep(c("EA prediction CSV", "2026 estimate raster"), times = 2),
+  Path = as.vector(rbind(csv_paths, raster_paths)),
+  Available = !is.na(Path)
+) %>%
+  mutate(Path = if_else(Available, Path, "Not found"))
+```
+
+This report reads saved outputs from the two growth-factor scripts. It does not
+refit the INLA models. Run `quarto render growth_factor_results_report.qmd` from
+the repository root. The input paths can be changed with Quarto parameters.
+
+Both scripts export EA-level CSVs, but `pop_path` lacks a trailing directory
+separator and the filenames are transposed relative to the script names. The
+default paths below follow the files each script currently writes, rather than
+the misleading filename labels.
+
+## Available Outputs
+
+```{r}
+kable(artifact_inventory, caption = "Result files discovered by the report")
+```
+
+### Run Comparison Checks
+
+Use these checks alongside an earlier archived report to identify output changes
+between runs. Matching dimensions do not guarantee matching predictions. Matching
+MD5 checksums indicate byte-identical files; different checksums can also reflect
+changes in row order, formatting, or file metadata rather than model estimates.
+No previous-run baseline is automatically loaded or compared here.
+
+::: {.panel-tabset}
+
+#### Dataframe Structure
+
+```{r}
+csv_structure <- bind_rows(lapply(names(csv_paths), function(model) {
+  data <- prediction_tables[[model]]
+  available <- !is.null(data)
+  if (available) {
+    data <- select(data, -.model)
+  }
+
+  tibble(
+    Model = model,
+    File = if (available) basename(csv_paths[[model]]) else "Not found",
+    Rows = if (available) nrow(data) else NA_integer_,
+    Columns = if (available) ncol(data) else NA_integer_,
+    Missing_values = if (available) sum(is.na(data)) else NA_integer_,
+    Rows_with_missing_values = if (available) sum(!complete.cases(data)) else NA_integer_,
+    Duplicate_rows = if (available) sum(duplicated(data)) else NA_integer_
+  )
+}))
+
+kable(csv_structure, caption = "Prediction CSV structure (excluding the report-added model label)")
+```
+
+#### File Fingerprints
+
+```{r}
+file_fingerprints <- artifact_inventory %>%
+  mutate(
+    Size_bytes = NA_real_,
+    MD5 = NA_character_
+  )
+available_files <- which(file_fingerprints$Available)
+if (length(available_files)) {
+  paths <- file_fingerprints$Path[available_files]
+  file_fingerprints$Size_bytes[available_files] <- file.info(paths)$size
+  file_fingerprints$MD5[available_files] <- unname(tools::md5sum(paths))
+}
+
+kable(
+  select(file_fingerprints, Model, Artifact, Size_bytes, MD5),
+  caption = "File sizes and fingerprints for comparing saved outputs across runs"
+)
+```
+
+:::
+
+## EA-Level Estimates
+
+The following summaries use the saved EA prediction CSVs, when available. Totals
+and error metrics are calculated over records with both observed and predicted
+2026 household counts. Interval coverage is the share of those records whose
+observed count falls between the saved lower and upper estimates.
+
+::: {.panel-tabset}
+
+### Overall Validation
+
+```{r}
+if (length(prediction_tables)) {
+  validation <- bind_rows(lapply(names(prediction_tables), function(model) {
+    data <- prediction_tables[[model]]
+    observed <- data$hh_count_2026
+    predicted <- data$predicted_hh_count_2026
+    valid <- complete.cases(observed, predicted)
+    observed <- observed[valid]
+    predicted <- predicted[valid]
+    residual <- observed - predicted
+    covered <- observed >= data$hh_lower_2026[valid] &
+      observed <= data$hh_upper_2026[valid]
+    correlation <- if (length(observed) > 1 && sd(observed) > 0 && sd(predicted) > 0) {
+      cor(observed, predicted)
+    } else {
+      NA_real_
+    }
+
+    tibble(
+      Model = model,
+      n = length(observed),
+      Observed_total = sum(observed),
+      Predicted_total = sum(predicted),
+      Bias = mean(residual),
+      Imprecision = sd(residual),
+      MAE = mean(abs(residual)),
+      MSE = mean(residual^2),
+      RMSE = sqrt(mean(residual^2)),
+      Correlation = correlation,
+      Interval_coverage = if (any(!is.na(covered))) mean(covered, na.rm = TRUE) else NA_real_
+    )
+  }))
+
+  kable(validation, digits = 3, caption = "2026 validation against observed EA counts")
+} else {
+  cat("EA validation metrics are unavailable until an EA prediction CSV is present.")
+}
+```
+
+### Household Summaries
+
+```{r}
+if (length(prediction_tables)) {
+  ea_values <- bind_rows(prediction_tables) %>%
+    select(.model, hh_count_2026, predicted_hh_count_2026) %>%
+    pivot_longer(
+      cols = c(hh_count_2026, predicted_hh_count_2026),
+      names_to = "Measure",
+      values_to = "Households"
+    ) %>%
+    mutate(Measure = recode(
+      Measure,
+      hh_count_2026 = "Observed 2026",
+      predicted_hh_count_2026 = "Predicted 2026"
+    )) %>%
+    filter(!is.na(Households)) %>%
+    group_by(.model, Measure) %>%
+    summarise(
+      n = n(),
+      Total = sum(Households),
+      Mean = mean(Households),
+      SD = sd(Households),
+      Median = median(Households),
+      Q1 = quantile(Households, 0.25),
+      Q3 = quantile(Households, 0.75),
+      Min = min(Households),
+      Max = max(Households),
+      .groups = "drop"
+    ) %>%
+    rename(Model = .model)
+
+  kable(ea_values, digits = 2, caption = "EA-level household count summaries")
+} else {
+  cat("No EA prediction CSVs were found at the configured paths.")
+}
+```
+
+
+### Rural/Urban Validation
+
+```{r}
+if (length(prediction_tables)) {
+  by_stratum <- bind_rows(prediction_tables) %>%
+    filter(!is.na(hh_count_2026), !is.na(predicted_hh_count_2026)) %>%
+    mutate(
+      residual = hh_count_2026 - predicted_hh_count_2026,
+      covered = hh_count_2026 >= hh_lower_2026 & hh_count_2026 <= hh_upper_2026
+    ) %>%
+    group_by(.model, ADM_STATUS) %>%
+    summarise(
+      n = n(),
+      Observed_total = sum(hh_count_2026),
+      Predicted_total = sum(predicted_hh_count_2026),
+      Bias = mean(residual),
+      MAE = mean(abs(residual)),
+      RMSE = sqrt(mean(residual^2)),
+      Interval_coverage = if (any(!is.na(covered))) mean(covered, na.rm = TRUE) else NA_real_,
+      .groups = "drop"
+    ) %>%
+    rename(Model = .model, Stratum = ADM_STATUS)
+
+  kable(by_stratum, digits = 3, caption = "2026 validation by rural/urban stratum")
+}
+```
+
+:::
+
+### Diagnostic Plots
+
+These plots recreate the model scripts' EA diagnostics from the saved prediction
+CSVs, without refitting either model. Vertical bars show the saved prediction
+intervals; the dashed line marks equal observed and predicted counts.
+
+```{r}
+ea_plot_data <- bind_rows(prediction_tables)
+if (nrow(ea_plot_data)) {
+  ea_plot_data <- ea_plot_data %>%
+    filter(is.finite(hh_count_2026), is.finite(predicted_hh_count_2026)) %>%
+    rename(Model = .model)
+
+  ea_distributions <- ea_plot_data %>%
+    select(Model, hh_count_2026, predicted_hh_count_2026) %>%
+    pivot_longer(
+      cols = c(hh_count_2026, predicted_hh_count_2026),
+      names_to = "Measure",
+      values_to = "Households"
+    ) %>%
+    mutate(Measure = recode(
+      Measure,
+      hh_count_2026 = "Observed 2026",
+      predicted_hh_count_2026 = "Predicted 2026"
+    ))
+}
+```
+
+::: {.panel-tabset}
+
+#### Observed vs Predicted
+
+```{r}
+#| fig-width: 10
+#| fig-height: 5
+#| fig-cap: "Observed and predicted 2026 EA household counts with prediction intervals."
+if (nrow(ea_plot_data)) {
+  ggplot(ea_plot_data, aes(x = hh_count_2026, y = predicted_hh_count_2026)) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "#219ebc") +
+    geom_errorbar(
+      aes(ymin = hh_lower_2026, ymax = hh_upper_2026),
+      width = 0, alpha = 0.4, color = "#264653", na.rm = TRUE
+    ) +
+    geom_point(size = 2, alpha = 0.7) +
+    facet_wrap(vars(Model), nrow = 1) +
+    labs(x = "Observed households", y = "Predicted households") +
+    theme_minimal(base_size = 12)
+} else {
+  cat("No complete EA predictions are available for plotting.")
+}
+```
+
+#### Household Count Densities
+
+```{r}
+#| fig-width: 10
+#| fig-height: 5
+#| fig-cap: "Density comparison of observed and predicted household counts by model."
+if (nrow(ea_plot_data)) {
+  density_data <- ea_distributions %>%
+    group_by(Model, Measure) %>%
+    filter(n() >= 2, n_distinct(Households) > 1) %>%
+    ungroup()
+
+  if (nrow(density_data)) {
+    ggplot(density_data, aes(x = Households, fill = Measure, color = Measure)) +
+      geom_density(alpha = 0.3) +
+      facet_wrap(vars(Model), nrow = 1) +
+      scale_fill_manual(values = c("Observed 2026" = "#2a9d8f", "Predicted 2026" = "#e76f51")) +
+      scale_color_manual(values = c("Observed 2026" = "#2a9d8f", "Predicted 2026" = "#e76f51")) +
+      labs(x = "Household count", y = "Density", fill = NULL, color = NULL) +
+      theme_minimal(base_size = 12) +
+      theme(legend.position = "bottom")
+  } else {
+    cat("Density plots require at least two distinct household counts per group.")
+  }
+} else {
+  cat("No complete EA predictions are available for plotting.")
+}
+```
+#### Household Count Boxplots
+
+```{r}
+#| fig-width: 10
+#| fig-height: 5
+#| fig-cap: "Observed and predicted household count distributions by model."
+if (nrow(ea_plot_data)) {
+  ggplot(ea_distributions, aes(x = Measure, y = Households, fill = Measure)) +
+    geom_boxplot(width = 0.6, alpha = 0.7) +
+    facet_wrap(vars(Model), nrow = 1) +
+    scale_fill_manual(values = c("Observed 2026" = "#2a9d8f", "Predicted 2026" = "#e76f51")) +
+    labs(x = NULL, y = "Household count") +
+    theme_minimal(base_size = 12) +
+    theme(legend.position = "none")
+} else {
+  cat("No complete EA predictions are available for plotting.")
+}
+```
+
+
+:::
+
+## Raster Estimates
+
+Raster totals sum the grid-cell household estimates. Quantiles below are
+calculated from a regular sample of up to 100,000 raster cells; the other
+statistics use all non-missing cells.
+
+```{r}
+if (length(rasters)) {
+  raster_summary <- bind_rows(lapply(names(rasters), function(model) {
+    raster <- rasters[[model]]
+    stats <- terra::global(raster, c("min", "max", "mean", "sum", "sd"), na.rm = TRUE)
+    valid_cells <- terra::global(!is.na(raster), "sum", na.rm = TRUE)[1, 1]
+    sample_size <- min(100000, terra::ncell(raster))
+    sample_values <- terra::spatSample(
+      raster,
+      size = sample_size,
+      method = "regular",
+      na.rm = TRUE,
+      as.df = TRUE
+    )[[1]]
+    quantiles <- quantile(sample_values, c(0.25, 0.5, 0.75), na.rm = TRUE)
+
+    tibble(
+      Model = model,
+      Rows = terra::nrow(raster),
+      Columns = terra::ncol(raster),
+      Valid_cells = as.numeric(valid_cells),
+      No_data_cells = terra::ncell(raster) - as.numeric(valid_cells),
+      Total = as.numeric(stats[1, "sum"]),
+      Mean = as.numeric(stats[1, "mean"]),
+      SD = as.numeric(stats[1, "sd"]),
+      Min = as.numeric(stats[1, "min"]),
+      Q1_sampled = as.numeric(quantiles[[1]]),
+      Median_sampled = as.numeric(quantiles[[2]]),
+      Q3_sampled = as.numeric(quantiles[[3]]),
+      Max = as.numeric(stats[1, "max"]),
+      Cell_width = terra::res(raster)[1],
+      Cell_height = terra::res(raster)[2],
+      CRS = terra::crs(raster)
+    )
+  }))
+
+  kable(raster_summary, digits = 3, caption = "2026 raster summary statistics")
+} else {
+  cat("No 2026 estimate rasters were found at the configured paths.")
+}
+```
+
+```{r}
+has_both_rasters <- all(c("Full Posterior", "Latent Posterior") %in% names(rasters))
+same_geometry <- has_both_rasters && terra::compareGeom(
+  rasters[["Full Posterior"]],
+  rasters[["Latent Posterior"]],
+  stopOnError = FALSE
+)
+
+if (same_geometry) {
+  difference <- rasters[["Full Posterior"]] - rasters[["Latent Posterior"]]
+  difference_stats <- terra::global(difference, c("min", "max", "mean", "sum", "sd"), na.rm = TRUE)
+  kable(
+    tibble(
+      Statistic = c("Minimum", "Maximum", "Mean", "Sum", "SD"),
+      Full_minus_Latent = unlist(
+        difference_stats[1, c("min", "max", "mean", "sum", "sd")],
+        use.names = FALSE
+      )
+    ),
+    digits = 3,
+    caption = "Pixel-wise difference (full posterior minus latent posterior)"
+  )
+} else if (has_both_rasters) {
+  cat("Raster grids differ, so a cell-by-cell difference was not calculated.")
+}
+```
+
+```{r}
+if (length(rasters)) {
+  raster_samples <- bind_rows(lapply(names(rasters), function(model) {
+    values <- terra::spatSample(
+      rasters[[model]],
+      size = min(60000, terra::ncell(rasters[[model]])),
+      method = "regular",
+      na.rm = TRUE,
+      as.df = TRUE,
+      xy = TRUE
+    )
+    names(values)[1:2] <- c("x", "y")
+    names(values)[3] <- "Estimate"
+    mutate(values, Model = model)
+  }))
+
+  ggplot(raster_samples, aes(x = x, y = y, fill = Estimate)) +
+    geom_raster() +
+    coord_equal() +
+    facet_wrap(vars(Model)) +
+    scale_fill_viridis_c(trans = "sqrt", name = "Households") +
+    labs(title = "2026 gridded household estimates", x = "Longitude", y = "Latitude") +
+    theme_minimal()
+}
+```
+
+```{r}
+if (length(rasters)) {
+  ggplot(raster_samples, aes(x = Estimate, fill = Model, color = Model)) +
+    geom_density(alpha = 0.2) +
+    labs(
+      title = "Distribution of 2026 grid-cell estimates",
+      x = "Estimated households per cell",
+      y = "Density"
+    ) +
+    theme_minimal()
+}
+```
+
+## Interpretation Notes
+
+- The latent-posterior script samples the latent growth factor; the full-posterior script also includes lognormal observation-level variation. Their intervals and raster distributions therefore need not match.
+- EA validation metrics are reported only when the corresponding CSV exists. The script-to-file mapping follows the current `write.csv` calls, not the transposed filenames.
+- Raster quantiles are sampled to keep rendering practical. Raster totals and the other raster statistics are computed over all valid cells.
+- Grid-cell estimates are allocated using the building-covariate weights in the scripts. Their sum should reproduce the associated EA-level predictions, subject to rasterization and missing-cell behavior.
