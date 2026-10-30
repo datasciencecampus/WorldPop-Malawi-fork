@@ -21,6 +21,11 @@
 #' render_quarto_report("growth_factor_results_report.qmd")
 #' }
 render_quarto_report <- function(report_name) {
+  # TODO: This line correctes environment path used by quarto, I had to include
+  # this for the function to run. Not sure if this should be kept in, would
+  # feel better if we could find a better way
+  Sys.setenv(QUARTO_R = file.path(R.home(), "bin"))
+
   logger::log_info("Rendering '{report_name}'...")
   if (system2("quarto", c("render", shQuote(report_name), "--to", "html")) != 0L) {
     stop("Failed to render report: ", report_name)
@@ -51,7 +56,7 @@ copy_report <- function(report_path, run_id,
     stop("Report archive already exists: ", archived_report)
   }
   if (!dir.exists(reports_dir) &&
-      !dir.create(reports_dir, recursive = TRUE, showWarnings = FALSE)) {
+    !dir.create(reports_dir, recursive = TRUE, showWarnings = FALSE)) {
     stop("Could not create reports directory: ", reports_dir)
   }
 
