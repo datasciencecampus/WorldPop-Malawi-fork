@@ -1,0 +1,37 @@
+name: "Pull Request Workflow"
+on:
+  pull_request:
+    # The specific activity types are listed here to include "labeled" and "unlabeled"
+    # (which are not included by default for the "pull_request" trigger).
+    # This is needed to allow skipping enforcement of the changelog in PRs with specific labels,
+    # as defined in the (optional) "skipLabels" property.
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+    branches:
+      - main
+      - development
+
+jobs:
+  # Enforces the update of a changelog file on every pull request.
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      # checks for updates to CHANGELOG.md
+      # https://github.com/marketplace/actions/changelog-enforcer
+      # changelog-enforcer v3.7
+      - uses: dangoslen/changelog-enforcer@8b5e9dc3121363bb7c0115f8533404d92af382de
+        with:
+          changeLogPath: "CHANGELOG.md"
+
+  # TODO: Find equivalent for R
+  # pre-commit:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     # checkout v7.0.1
+  #     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+  #       # setup-python v7.1.0
+  #     - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+  #       # Clone of https://github.com/pre-commit/action v3.0.1
+  #       # this action references tags within it's workflow and so does not
+  #       # abide by the ONS GitHub Actions Policy, the clone replaces the tag
+  #       # with a commit SHA in the action.
+  #     - uses: ./.github/actions/pre-commit
