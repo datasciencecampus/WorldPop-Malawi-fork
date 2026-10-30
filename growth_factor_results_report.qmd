@@ -5,6 +5,7 @@ date: today
 date-format: "D MMMM YYYY"
 format:
   html:
+    embed-resources: true
     toc: true
     number-sections: true
     code-fold: true
@@ -267,25 +268,6 @@ if (nrow(ea_plot_data)) {
 }
 ```
 
-#### Household Count Boxplots
-
-```{r}
-#| fig-width: 10
-#| fig-height: 5
-#| fig-cap: "Observed and predicted household count distributions by model."
-if (nrow(ea_plot_data)) {
-  ggplot(ea_distributions, aes(x = Measure, y = Households, fill = Measure)) +
-    geom_boxplot(width = 0.6, alpha = 0.7) +
-    facet_wrap(vars(Model), nrow = 1) +
-    scale_fill_manual(values = c("Observed 2026" = "#2a9d8f", "Predicted 2026" = "#e76f51")) +
-    labs(x = NULL, y = "Household count") +
-    theme_minimal(base_size = 12) +
-    theme(legend.position = "none")
-} else {
-  cat("No complete EA predictions are available for plotting.")
-}
-```
-
 #### Household Count Densities
 
 ```{r}
@@ -314,6 +296,25 @@ if (nrow(ea_plot_data)) {
   cat("No complete EA predictions are available for plotting.")
 }
 ```
+#### Household Count Boxplots
+
+```{r}
+#| fig-width: 10
+#| fig-height: 5
+#| fig-cap: "Observed and predicted household count distributions by model."
+if (nrow(ea_plot_data)) {
+  ggplot(ea_distributions, aes(x = Measure, y = Households, fill = Measure)) +
+    geom_boxplot(width = 0.6, alpha = 0.7) +
+    facet_wrap(vars(Model), nrow = 1) +
+    scale_fill_manual(values = c("Observed 2026" = "#2a9d8f", "Predicted 2026" = "#e76f51")) +
+    labs(x = NULL, y = "Household count") +
+    theme_minimal(base_size = 12) +
+    theme(legend.position = "none")
+} else {
+  cat("No complete EA predictions are available for plotting.")
+}
+```
+
 
 :::
 
