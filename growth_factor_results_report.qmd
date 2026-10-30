@@ -105,6 +105,10 @@ and error metrics are calculated over records with both observed and predicted
 2026 household counts. Interval coverage is the share of those records whose
 observed count falls between the saved lower and upper estimates.
 
+::: {.panel-tabset}
+
+### Household Summaries
+
 ```{r}
 if (length(prediction_tables)) {
   ea_values <- bind_rows(prediction_tables) %>%
@@ -140,6 +144,8 @@ if (length(prediction_tables)) {
   cat("No EA prediction CSVs were found at the configured paths.")
 }
 ```
+
+### Overall Validation
 
 ```{r}
 if (length(prediction_tables)) {
@@ -180,6 +186,8 @@ if (length(prediction_tables)) {
 }
 ```
 
+### Rural/Urban Validation
+
 ```{r}
 if (length(prediction_tables)) {
   by_stratum <- bind_rows(prediction_tables) %>%
@@ -204,6 +212,8 @@ if (length(prediction_tables)) {
   kable(by_stratum, digits = 3, caption = "2026 validation by rural/urban stratum")
 }
 ```
+
+:::
 
 ## Raster Estimates
 
