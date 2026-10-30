@@ -99,6 +99,63 @@ the misleading filename labels.
 kable(artifact_inventory, caption = "Result files discovered by the report")
 ```
 
+### Run Comparison Checks
+
+Use these checks alongside an earlier archived report to identify output changes
+between runs. Matching dimensions do not guarantee matching predictions. Matching
+MD5 checksums indicate byte-identical files; different checksums can also reflect
+changes in row order, formatting, or file metadata rather than model estimates.
+No previous-run baseline is automatically loaded or compared here.
+
+::: {.panel-tabset}
+
+#### Dataframe Structure
+
+```{r}
+csv_structure <- bind_rows(lapply(names(csv_paths), function(model) {
+  data <- prediction_tables[[model]]
+  available <- !is.null(data)
+  if (available) {
+    data <- select(data, -.model)
+  }
+
+  tibble(
+    Model = model,
+    File = if (available) basename(csv_paths[[model]]) else "Not found",
+    Rows = if (available) nrow(data) else NA_integer_,
+    Columns = if (available) ncol(data) else NA_integer_,
+    Missing_values = if (available) sum(is.na(data)) else NA_integer_,
+    Rows_with_missing_values = if (available) sum(!complete.cases(data)) else NA_integer_,
+    Duplicate_rows = if (available) sum(duplicated(data)) else NA_integer_
+  )
+}))
+
+kable(csv_structure, caption = "Prediction CSV structure (excluding the report-added model label)")
+```
+
+#### File Fingerprints
+
+```{r}
+file_fingerprints <- artifact_inventory %>%
+  mutate(
+    Size_bytes = NA_real_,
+    MD5 = NA_character_
+  )
+available_files <- which(file_fingerprints$Available)
+if (length(available_files)) {
+  paths <- file_fingerprints$Path[available_files]
+  file_fingerprints$Size_bytes[available_files] <- file.info(paths)$size
+  file_fingerprints$MD5[available_files] <- unname(tools::md5sum(paths))
+}
+
+kable(
+  select(file_fingerprints, Model, Artifact, Size_bytes, MD5),
+  caption = "File sizes and fingerprints for comparing saved outputs across runs"
+)
+```
+
+:::
+
 ## EA-Level Estimates
 
 The following summaries use the saved EA prediction CSVs, when available. Totals
