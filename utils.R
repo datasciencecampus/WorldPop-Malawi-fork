@@ -27,3 +27,38 @@ render_quarto_report <- function(report_name) {
   }
   logger::log_success("Report rendered from '{report_name}'")
 }
+
+#' Copy an HTML report with a timestamped filename
+#'
+#' @param report_path Path to the rendered, self-contained HTML report.
+#' @param run_id Pipeline timestamp, shared with the log filename.
+#' @param report_name Name used before the timestamp in the HTML filename.
+#' @param reports_dir Parent directory for archived reports.
+#' @details Render with Quarto's embed-resources: true option so images and
+#'   styles are embedded in the HTML. Copies are saved directly in reports_dir
+#'   as report_name_run_id.html. Existing files are not overwritten, and the
+#'   source report is unchanged.
+#' @return Invisibly returns the path to the archived HTML report.
+copy_report <- function(report_path, run_id,
+                        report_name = tools::file_path_sans_ext(basename(report_path)),
+                        reports_dir = "reports") {
+  if (!file.exists(report_path)) {
+    stop("Report not found: ", report_path)
+  }
+
+  archived_report <- file.path(reports_dir, paste0(report_name, "_", run_id, ".html"))
+  if (file.exists(archived_report)) {
+    stop("Report archive already exists: ", archived_report)
+  }
+  if (!dir.exists(reports_dir) &&
+      !dir.create(reports_dir, recursive = TRUE, showWarnings = FALSE)) {
+    stop("Could not create reports directory: ", reports_dir)
+  }
+
+  if (!file.copy(report_path, archived_report, overwrite = FALSE)) {
+    stop("Failed to copy report to: ", archived_report)
+  }
+
+  logger::log_success("Report archived: {archived_report}")
+  invisible(archived_report)
+}

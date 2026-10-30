@@ -65,6 +65,10 @@ withCallingHandlers(
       # source("08_Growth_Factor_Model_Latent_Posterior.R")
 
       render_quarto_report("growth_factor_results_report.qmd")
+      copy_report(
+        "growth_factor_results_report.html", run_id,
+        report_name = "growth_factor_report"
+      )
     } else {
       log_warn("Growth Model has been skipped.")
     }
