@@ -112,7 +112,7 @@ mphc_2018 <- mphc_2018 %>%
 
 # cg remove these records from the main file
 mphc_2018 <- mphc_2018 %>%
-  filter_out(homeless == "130")
+  dplyr::filter(!(homeless == "130"))
 
 
 # TODO: Add into report, maybe shows people by household
