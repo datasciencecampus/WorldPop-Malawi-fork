@@ -169,7 +169,7 @@ logger::log_info("2018 covariate extraction and export complete.")
 # Remove all object except the ones listed
 rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
-  "shapefile_path", "ea", "pop_data"
+  "shapefile_path", "ea", "pop_data", "run_growth_model"
 )))
 
 # Clear console
@@ -299,7 +299,7 @@ logger::log_info("2024 covariate extraction and export complete.")
 # Remove all object except the ones listed
 rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
-  "shapefile_path", "ea", "pop_data"
+  "shapefile_path", "ea", "pop_data", "run_growth_model"
 )))
 
 # Clear console

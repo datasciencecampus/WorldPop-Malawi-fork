@@ -246,7 +246,7 @@ mphc_summary <- mphc_summary %>%
 # Remove all object except the ones listed
 rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
-  "shapefile_path", "mphc_summary", "ea"
+  "shapefile_path", "mphc_summary", "ea", "run_growth_model"
 )))
 
 # Clear console
@@ -342,7 +342,7 @@ logger::log_info("ICT summary complete: {nrow(ICT_rbind)} EA rows; {sum(ICT_rbin
 rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
   "shapefile_path", "mphc_summary", "ea",
-  "ICT_rbind"
+  "ICT_rbind", "run_growth_model"
 )))
 
 # Clear console
@@ -433,7 +433,7 @@ logger::log_info("IHS6 summary complete: {nrow(IHS_rbind)} EA rows; {sum(IHS_rbi
 rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
   "shapefile_path", "mphc_summary", "ea",
-  "ICT_rbind", "IHS_rbind"
+  "ICT_rbind", "IHS_rbind", "run_growth_model"
 )))
 
 # Clear console
@@ -524,7 +524,7 @@ logger::log_info("NACA summary complete: {nrow(Naca_rbind)} EA rows; {sum(Naca_r
 rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
   "shapefile_path", "mphc_summary", "ea",
-  "ICT_rbind", "IHS_rbind", "Naca_rbind"
+  "ICT_rbind", "IHS_rbind", "Naca_rbind", "run_growth_model"
 )))
 
 # Clear console
@@ -641,7 +641,7 @@ rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
   "shapefile_path", "mphc_summary", "ea",
   "ICT_rbind", "IHS_rbind", "Naca_rbind",
-  "dhs_hh_count"
+  "dhs_hh_count", "run_growth_model"
 )))
 
 # Clear console
@@ -719,7 +719,7 @@ rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
   "shapefile_path", "mphc_summary", "ea",
   "ICT_rbind", "IHS_rbind", "Naca_rbind",
-  "dhs_hh_count", "zomba_tibble"
+  "dhs_hh_count", "zomba_tibble", "run_growth_model"
 )))
 
 # Clear console
@@ -781,7 +781,7 @@ rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
   "shapefile_path", "mphc_summary", "ea",
   "ICT_rbind", "IHS_rbind", "Naca_rbind",
-  "dhs_hh_count", "zomba_tibble", "malemia_tibble"
+  "dhs_hh_count", "zomba_tibble", "malemia_tibble", "run_growth_model"
 )))
 
 # Clear console
