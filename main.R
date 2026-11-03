@@ -18,7 +18,7 @@ logger::log_threshold(logger::INFO)
 # These option will go in the config later
 #
 # Run the data processing part of the pipeline
-run_data_processing <- FALSE
+run_data_processing <- TRUE
 
 # Run only the Growth model
 run_growth_model <- TRUE
