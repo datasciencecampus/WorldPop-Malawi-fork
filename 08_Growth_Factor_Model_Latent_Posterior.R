@@ -30,6 +30,10 @@ output_path <- "Output_Data/Predicted_Estimates/"
 shapefile_path <- "Data/Shapefiles/"
 pop_path <- "Output_Data/Predicted_Estimates"
 
+# Create output directory if it doesn't exist
+dir.create(output_path, recursive = TRUE, showWarnings = FALSE)
+dir.create(pop_path, recursive = TRUE, showWarnings = FALSE)
+
 #####################################################################################
 #####################################################################################
 #####################################################################################

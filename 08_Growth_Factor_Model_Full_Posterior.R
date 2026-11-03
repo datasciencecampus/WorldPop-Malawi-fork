@@ -33,6 +33,10 @@ output_path <- "Output_Data/Predicted_Estimates/"
 shapefile_path <- "Data/Shapefiles/"
 pop_path <- "Output_Data/Predicted_Estimates"
 
+# Create output directory if it doesn't exist
+dir.create(output_path, recursive = TRUE, showWarnings = FALSE)
+dir.create(pop_path, recursive = TRUE, showWarnings = FALSE)
+
 # TODO: REMOVE Only needed if you can't download INLA
 # url <- "https://inla.r-inla-download.org/R/stable/bin/windows/contrib/4.6/PACKAGES"
 # download.file(url, tempfile(), method = "libcurl")
