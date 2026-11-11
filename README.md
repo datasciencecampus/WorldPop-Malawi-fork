@@ -81,7 +81,8 @@ The pipeline requires input data organized as follows. Only create directories a
 │   │       └── *.csv (14 files)          # Individual village survey files
 │   │
 │   ├── Shapefiles/                       # Spatial reference data (read-only)
-│   │   └── 2018_MPHC_EAs_Final_for_Use_Corrected.shp (+ .dbf, .prj, .shx)
+│   │   ├── 2018_MPHC_EAs_Final_for_Use_Corrected.shp (+ .dbf, .prj, .shx)
+│   │   └── Country_Shapefile.shp (+ .dbf, .prj, .shx)
 │   │
 │   ├── Covariates/                       # Covariate raster data (read-only)
 │   │   ├── Covariates_2018/              # 2018 covariate GeoTIFFs
