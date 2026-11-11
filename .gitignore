@@ -1,2 +1,4 @@
 # Ignore data folder
 *Data/
+*logs/
+.Rhistory

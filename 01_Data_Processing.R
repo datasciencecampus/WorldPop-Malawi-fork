@@ -20,8 +20,9 @@ shapefile_path <- "Data/Shapefiles/"
 ##################################################################################
 ################## LOAD EA SHAPEFILE #############################################
 # load data
+logger::log_info("Starting data processing; loading EA boundaries.")
 ea <- st_read(file.path(shapefile_path, "2018_MPHC_EAs_Final_for_Use_Corrected.shp"))
-
+logger::log_info("Loaded {nrow(ea)} EA boundary rows; checking identifiers and geometries.")
 
 # Check whether EA_CODE are duplicated (returns TRUE or FALSE)
 any(duplicated(ea$EA_CODE))
@@ -29,11 +30,14 @@ any(duplicated(ea$EA_CODE))
 # Count the total number of duplicate rows
 # TODO - there are duplicate EAs - when you look at them on the map they fall on a lake
 # Are they identical rows or do they have different hh numbers? Do they have any hh?
+
+# TODO: Filter out duplicates so you're not dealing with two dataframes. Add
+# report on duplicates to the logs if necessary.
 sum(duplicated(ea$EA_CODE))
 
 # Extract all rows where the EA_CODE appears more than once
 ea_duplicates <- ea %>%
-  filter(EA_CODE %in% EA_CODE[duplicated(EA_CODE)]) %>%
+  dplyr::filter(EA_CODE %in% EA_CODE[duplicated(EA_CODE)]) %>%
   arrange(EA_CODE) # Group them together by code for easy viewing
 
 # View the duplicates interactively
@@ -68,7 +72,9 @@ sf::sf_use_s2(FALSE)
 ######### PROCESS 2018 CENSUS DATA #################################################
 
 # Load datasets
+logger::log_info("Loading 2018 census data from {input_path}0923_pop_modelling_data.dta.")
 mphc_2018 <- read_dta(paste0(input_path, "0923_pop_modelling_data.dta"))
+logger::log_info("Processing {nrow(mphc_2018)} census records into household and EA summaries.")
 
 
 # Mutate and add a  variable called no_persons = 1 (individual record)
@@ -87,7 +93,7 @@ mphc_2018 <- mphc_2018 %>%
 
 # cg extract records where line_number = 1 but p02>1 (homeless)
 # mphc_2018_homeless <- mphc_2018 %>%
-#  filter(line_number == 1 & p02 >1)
+#  dplyr::filter(line_number == 1 & p02 >1)
 # CG Write to file
 # write.csv(mphc_2018_homeless, paste0(output_path, "mphc_2018_homeless"), row.names = F)
 
@@ -106,7 +112,7 @@ mphc_2018 <- mphc_2018 %>%
 
 # cg remove these records from the main file
 mphc_2018 <- mphc_2018 %>%
-  filter_out(homeless == "130")
+  dplyr::filter(!(homeless == "130"))
 
 
 # TODO: Add into report, maybe shows people by household
@@ -123,20 +129,23 @@ mphc_2018_summ <- mphc_2018 %>%
 ##################################################################
 ##################################################################
 ### Process Points with GPS
-# TODO - Instead of just dropping records with NA in log/lat, it would be good to first group the data
-# by Unique_HH_EA_CODE and if there is a group that has at least one record with GPS coordinates,
-# we could use that group's centroid instead of dropping all records.
+# TODO - Instead of just dropping records with NA in log/lat, it would be good
+# to first group the data by Unique_HH_EA_CODE and if there is a group that
+# has at least one record with GPS coordinates, we could use that group's
+# centroid instead of dropping all records.
 
-# It would also be useful to check how many records show different GPS coordinates within the same Unique_HH_EA_CODE
-# and if there are some that are different if they are in close proximity or not.
+# TODO: It would also be useful to check how many records show different GPS
+# coordinates within the same Unique_HH_EA_CODE and if there are some that are
+# different if they are in close proximity or not.
 
 # Filter points with gps coordinates
+logger::log_info("Processing census households with GPS coordinates and assigning nearest EAs.")
 mphc_with_gps <- mphc_2018 %>%
   drop_na(hh_longitude, hh_latitude)
 
 # Get the centroid of household within cluster
-# This is using all the gps locations within each Unique_HH_EA_CODE to calculate a mean
-# You end up with one row per hh (household) within each Unique_HH_EA_CODE
+# This is using all the gps locations within each Unique_HH_EA_CODE to calculate
+# a mean, you end up with one row per hh (household) within each Unique_HH_EA_CODE
 mphc_with_gps <- mphc_with_gps %>%
   group_by(Unique_HH_EA_CODE) %>%
   summarise(
@@ -174,17 +183,20 @@ mphc_with_gps$EA_CODE <- nearest_ids
 # Convert data to tibble
 mphc_with_gps <- mphc_with_gps %>%
   as_tibble() %>%
-  select(-geometry)
+  dplyr::select(-geometry)
 
 #########################################################################
 
-# Here we are going to process record without gps first ,cg note this is now 'we're going to do these second'
-# We are processing the data based on the Census EA_CODE
+# Here we are going to process record without gps first ,cg note this is now
+# 'we're going to do these second' We are processing the data based on the
+# Census EA_CODE
 
 # Filter records without GPS coordinates
-# TODO - instead get the records for which no one in the Unique_HH_EA_CODE has GPS coordinates
+# TODO - instead get the records for which no one in the Unique_HH_EA_CODE has
+# GPS coordinates
+logger::log_info("Processing census records without GPS coordinates.")
 mphc_no_gps <- mphc_2018 %>%
-  filter(is.na(hh_longitude) | is.na(hh_latitude))
+  dplyr::filter(is.na(hh_longitude) | is.na(hh_latitude))
 
 # summarized hh count without gps
 mphc_no_gps <- mphc_no_gps %>%
@@ -192,7 +204,7 @@ mphc_no_gps <- mphc_no_gps %>%
   summarise(
     mphc_total_pop = sum(no_persons, na.rm = T),
     mphc_hh_count = n_distinct(Unique_HH_EA_CODE)
-  ) %>% # Distinct count of household, cg note this should be changed from (unique_hh to Unique_HH_EA_CODE)
+  ) %>% # Distinct count of household
   ungroup()
 
 # Because there is potential for duplicate hh with those with gps
@@ -212,7 +224,7 @@ mphc_no_gps <- mphc_no_gps %>%
 
 # rbind both dataset
 mphc_rbind <- rbind(mphc_with_gps, mphc_no_gps) %>%
-  select(-Unique_HH_EA_CODE)
+  dplyr::select(-Unique_HH_EA_CODE)
 
 # Summarize overall data
 mphc_summary <- mphc_rbind %>%
@@ -224,6 +236,7 @@ sum(mphc_summary$mphc_total_pop)
 sum(mphc_summary$mphc_hh_count)
 
 # Rename hh_count
+logger::log_info("2018 census summary complete: {nrow(mphc_summary)} EAs.")
 mphc_summary <- mphc_summary %>%
   rename(
     hh_count_2018 = mphc_hh_count,
@@ -233,7 +246,7 @@ mphc_summary <- mphc_summary %>%
 # Remove all object except the ones listed
 rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
-  "shapefile_path", "mphc_summary", "ea"
+  "shapefile_path", "mphc_summary", "ea", "run_growth_model"
 )))
 
 # Clear console
@@ -245,6 +258,7 @@ gc()
 ####################################################################################
 ######### PROCESS ICT DATA ################################################
 # Load data
+logger::log_info("Loading and processing ICT listing data.")
 ICT_data <- read_dta(paste0(input_path, "ICT Listing WorldPop.dta"))
 
 # Add a new column to data called hh_count
@@ -254,12 +268,13 @@ ICT_data <- ICT_data %>%
 # summarize gps accuracy of ICT data record
 summary(ICT_data$GPS__Accuracy)
 
+# TODO: This makes no sense, it just says do the same thing no matter what
 # if gps accuracy is greater than 5m summarize data in original EA Code
 # If record has no gps summarize data in original EA Code
 
 # Filter records without GPS coordinates and those with gps accuracy above 5m
 ict_no_gps <- ICT_data %>%
-  filter(
+  dplyr::filter(
     is.na(GPS__Longitude) |
       is.na(GPS__Latitude) |
       GPS__Accuracy > 5
@@ -277,7 +292,7 @@ ict_no_gps <- ict_no_gps %>%
 
 # Convert to an sf point object
 ICT_sf <- ICT_data %>%
-  filter(GPS__Accuracy <= 5) %>%
+  dplyr::filter(GPS__Accuracy <= 5) %>%
   drop_na(GPS__Longitude, GPS__Latitude) %>%
   st_as_sf(coords = c("GPS__Longitude", "GPS__Latitude"))
 
@@ -314,16 +329,20 @@ ICT_rbind <- ICT_rbind %>%
   group_by(EA_Number) %>%
   summarise(across(everything(), \(x) sum(x, na.rm = TRUE)))
 
+# TODO: What happens when they don't add up? what happens when they do?
+# Wrap this in some sort of error handling, explicitly stating what should
+# happen
 # check whether data adds up to original
 sum(ICT_rbind$ict_hh_count)
 sum(ICT_data$hh_count)
 
+logger::log_info("ICT summary complete: {nrow(ICT_rbind)} EA rows; {sum(ICT_rbind$ict_hh_count)} households.")
 
 # Remove all object except the ones listed
 rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
   "shapefile_path", "mphc_summary", "ea",
-  "ICT_rbind"
+  "ICT_rbind", "run_growth_model"
 )))
 
 # Clear console
@@ -335,6 +354,7 @@ gc()
 ######### PROCESS IHS6 DATA ################################################
 
 # Load data
+logger::log_info("Loading and processing IHS6 listing data.")
 IHS6_data <- read_dta(paste0(input_path, "IHS6 Listing WorldPop.dta"))
 
 # Add a new column to data called hh_count
@@ -349,7 +369,7 @@ summary(IHS6_data$GPS__Accuracy)
 
 # Filter records without GPS coordinates and those with gps accuracy above 5m
 IHS_no_gps <- IHS6_data %>%
-  filter(
+  dplyr::filter(
     is.na(GPS__Longitude) |
       is.na(GPS__Latitude) |
       GPS__Accuracy > 5
@@ -367,7 +387,7 @@ IHS_no_gps <- IHS_no_gps %>%
 
 # Convert to sf object
 IHS_sf <- IHS6_data %>%
-  filter(GPS__Accuracy <= 5) %>%
+  dplyr::filter(GPS__Accuracy <= 5) %>%
   drop_na(GPS__Longitude, GPS__Latitude) %>%
   st_as_sf(coords = c("GPS__Longitude", "GPS__Latitude"))
 
@@ -408,11 +428,12 @@ IHS_rbind <- IHS_rbind %>%
 sum(IHS_rbind$ihs_hh_count)
 sum(IHS6_data$hh_count)
 
+logger::log_info("IHS6 summary complete: {nrow(IHS_rbind)} EA rows; {sum(IHS_rbind$ihs_hh_count)} households.")
 # Remove all object except the ones listed
 rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
   "shapefile_path", "mphc_summary", "ea",
-  "ICT_rbind", "IHS_rbind"
+  "ICT_rbind", "IHS_rbind", "run_growth_model"
 )))
 
 # Clear console
@@ -424,6 +445,7 @@ gc()
 ######### PROCESS NACA DATA ################################################
 
 # Load dataset
+logger::log_info("Loading and processing NACA listing data.")
 Naca_data <- read_dta(paste0(input_path, "Naca Listing WorldPop.dta"))
 
 # Add a new column to data called hh_count
@@ -438,7 +460,7 @@ summary(Naca_data$accuracy)
 
 # Filter records without GPS coordinates and those with gps accuracy above 5m
 Naca_no_gps <- Naca_data %>%
-  filter(
+  dplyr::filter(
     is.na(longitude) |
       is.na(latitude) |
       accuracy > 5
@@ -456,7 +478,7 @@ Naca_no_gps <- Naca_no_gps %>%
 
 # Convert to sf object
 Naca_sf <- Naca_data %>%
-  filter(accuracy <= 5) %>%
+  dplyr::filter(accuracy <= 5) %>%
   drop_na(longitude, latitude) %>%
   st_as_sf(coords = c("longitude", "latitude"))
 
@@ -497,11 +519,12 @@ Naca_rbind <- Naca_rbind %>%
 sum(Naca_rbind$naca_hh_count)
 sum(Naca_data$hh_count)
 
+logger::log_info("NACA summary complete: {nrow(Naca_rbind)} EA rows; {sum(Naca_rbind$naca_hh_count)} households.")
 # Remove all object except the ones listed
 rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
   "shapefile_path", "mphc_summary", "ea",
-  "ICT_rbind", "IHS_rbind", "Naca_rbind"
+  "ICT_rbind", "IHS_rbind", "Naca_rbind", "run_growth_model"
 )))
 
 # Clear console
@@ -515,6 +538,7 @@ gc()
 
 # Load dhs data
 
+logger::log_info("Loading DHS listing and segmentation data; processing non-segmented clusters.")
 dhs_listing <- read_dta(paste0(input_path, "FINAL MDHS LISTING DATA_Annon.dta"))
 dhs_file <- read.csv(paste0(input_path, "DHS_Segmented_File.csv"))
 
@@ -523,7 +547,7 @@ unique(dhs_file$Cluster.Segmented)
 
 # Get non-segmented cluster
 non_seg_cluster <- dhs_file %>%
-  filter(grepl("^no\\b", Cluster.Segmented, ignore.case = TRUE))
+  dplyr::filter(grepl("^no\\b", Cluster.Segmented, ignore.case = TRUE))
 
 # Unique cluster id
 unique(non_seg_cluster$DHScluster)
@@ -541,7 +565,7 @@ dhs_listing <- dhs_listing %>%
 
 # Subset dhs_listing using the DHScluster IDs in non_seg_cluster
 dhs_listing <- dhs_listing %>%
-  filter(QHCLUST %in% unique(non_seg_cluster$DHScluster))
+  dplyr::filter(QHCLUST %in% unique(non_seg_cluster$DHScluster))
 
 # Summarize total number of hhold per dhs cluster
 dhs_hh_summary <- dhs_listing %>%
@@ -579,6 +603,7 @@ st_crs(dhs_centroids_sf) <- 4326
 dhs_centroids_sf <- st_transform(dhs_centroids_sf, crs = st_crs(ea))
 
 # Calculate nearest neighbor distance from dhs_centroids to ea shapefile
+logger::log_info("Matching {nrow(dhs_centroids_sf)} DHS centroids to EA boundaries using the 5 km threshold.")
 nearest <- st_nn(dhs_centroids_sf, ea, k = 1, returnDist = TRUE)
 
 # Extract distances (in meters for projected CRS)
@@ -593,7 +618,7 @@ dhs_centroids_sf <- dhs_centroids_sf %>%
 
 # drop point more than 5km
 dhs_centroids_sf <- dhs_centroids_sf %>%
-  filter(within_5km == 1)
+  dplyr::filter(within_5km == 1)
 
 # EA Nearest Neighbor Assignment
 nearest_indices <- st_nearest_feature(dhs_centroids_sf, ea)
@@ -616,7 +641,7 @@ rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
   "shapefile_path", "mphc_summary", "ea",
   "ICT_rbind", "IHS_rbind", "Naca_rbind",
-  "dhs_hh_count"
+  "dhs_hh_count", "run_growth_model"
 )))
 
 # Clear console
@@ -628,20 +653,23 @@ gc()
 ######### PROCESS ZOMBA DISTRICT DATA ################################################
 
 # Load all Excel files in Zomba folder
+logger::log_info("Loading and processing Zomba household CSV files.")
 files <- list.files(
   path = paste0(input_path, "zomba_csv"),
   pattern = "\\.csv$",
   full.names = TRUE
 )
 
+# TODO: again add some error handling here, I check the files so what?
 # Check files
 files
+logger::log_info("Found {length(files)} Zomba CSV files to combine.")
 
 # Read and combine all files
 zomba_data <- files %>%
   map_dfr(~ {
     read_csv(.x, show_col_types = FALSE) %>%
-      select(
+      dplyr::select(
         -any_of(c("HOUSEHOLD NUMBER", "HOUSEHOLD.NUMBER", "registration_date")) # Remove variables
       )
   })
@@ -691,7 +719,7 @@ rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
   "shapefile_path", "mphc_summary", "ea",
   "ICT_rbind", "IHS_rbind", "Naca_rbind",
-  "dhs_hh_count", "zomba_tibble"
+  "dhs_hh_count", "zomba_tibble", "run_growth_model"
 )))
 
 # Clear console
@@ -704,6 +732,7 @@ gc()
 ######### PROCESS MALEMA DISTRICT DATA ################################################
 
 # Load data
+logger::log_info("Loading and processing Malemia household data.")
 malemia_data <- read.csv(paste0(input_path, "malemia_hh_without_IDs.csv"))
 
 # Add a new column to data called hh_count
@@ -752,7 +781,7 @@ rm(list = setdiff(ls(), c(
   "drive_path", "input_path", "output_path",
   "shapefile_path", "mphc_summary", "ea",
   "ICT_rbind", "IHS_rbind", "Naca_rbind",
-  "dhs_hh_count", "zomba_tibble", "malemia_tibble"
+  "dhs_hh_count", "zomba_tibble", "malemia_tibble", "run_growth_model"
 )))
 
 # Clear console
@@ -763,6 +792,7 @@ cat("\014")
 ###############################################################################
 ############ SUMMARIZE 2026 DATA ##############################################
 # Load datasets
+logger::log_info("Loading and summarizing 2026 census-mapping data.")
 data_2026 <- read_excel(paste0(input_path, "CensusMapping_data_09092026.xlsx"), sheet = 1) # or sheet = "Sheet name"
 
 # Summarize data
@@ -785,7 +815,7 @@ sum(summary_2026$total_pop_2026)
 sex_sum <- summary_2026 %>%
   mutate(
     sex_group_sum = rowSums(
-      select(., matches("^(male|female)_")),
+      dplyr::select(., matches("^(male|female)_")),
       na.rm = TRUE
     ),
     sex_sum_matches_total = sex_group_sum == total_pop_2026
@@ -801,6 +831,7 @@ sex_sum %>%
 
 # Combine Data ------------------------------------------------------------
 
+logger::log_info("Combining census and survey summaries by EA code.")
 combined_data <- mphc_summary %>%
   left_join(summary_2026, by = c("EA_CODE" = "ea_code")) %>%
   left_join(ICT_rbind, by = c("EA_CODE" = "EA_Number")) %>%
@@ -833,13 +864,15 @@ combined_data <- combined_data %>%
 
 # Arrange data in proper order
 combined_data <- combined_data %>%
-  select(
+  dplyr::select(
     EA_CODE, total_pop_2018, total_pop_2026, hh_count_2018, hh_count_2024,
     hh_count_2026, everything()
   )
 
 # Write to file
+logger::log_info("Writing {nrow(combined_data)} summarized EA rows to {output_path}summarized_survey_data.csv.")
 write.csv(combined_data, paste0(output_path, "summarized_survey_data.csv"), row.names = F)
+logger::log_info("Data processing complete; summarized survey CSV written successfully.")
 
 #################### END OF SCRIPT #########################################
 ###########################################################################

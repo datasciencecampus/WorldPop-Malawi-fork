@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Improvements
+- Minor fixes to ensure pipeline runs including replacing "filter_out" with "dplyr::filter" 
 
 ### Documentation Update
 
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 in growth model.
 
 ### Improvements
+- Added CI/CD workflow to block merge on no changelog difference.
 
 ### Documentation Update
 
