@@ -155,7 +155,7 @@ ea_2018 <- ea_2018 %>%
 # but then reintroduces the columns starting with x at the end so all the
 # admin data before the covariates
 ea_2018 <- ea_2018 %>%
-  dplyr::select(-starts_with(c("x", "geometry")), starts_with("x"))
+  dplyr::select(-dplyr::starts_with(c("x", "geometry")), dplyr::starts_with("x"))
 
 # Export to file
 logger::log_info("Writing {nrow(ea_2018)} EA rows to {output_path}Malawi_2018_data.csv.")
@@ -285,7 +285,7 @@ ea_2024 <- ea_2024 %>%
 
 # Arrange data in order
 ea_2024 <- ea_2024 %>%
-  select(-starts_with(c("x", "geometry")), starts_with("x"))
+  dplyr::select(-dplyr::starts_with(c("x", "geometry")), dplyr::starts_with("x"))
 
 # Export to file
 logger::log_info("Writing {nrow(ea_2024)} EA rows to {output_path}Malawi_2024_data.csv.")
@@ -408,7 +408,7 @@ ea_2026 <- ea_2026 %>%
 
 # Arrange data in order
 ea_2026 <- ea_2026 %>%
-  select(-starts_with(c("x", "geometry")), starts_with("x"))
+  dplyr::select(-dplyr::starts_with(c("x", "geometry")), dplyr::starts_with("x"))
 
 # Export to file
 logger::log_info("Writing {nrow(ea_2026)} EA rows to {output_path}Malawi_2026_data.csv.")

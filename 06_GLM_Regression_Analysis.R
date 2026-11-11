@@ -41,7 +41,7 @@ summary(Malawi_2024_data$hh_count_2024)
 
 #Filter household count
 EA_data <- Malawi_2024_data %>% 
-  filter(hh_count_2024 > 17)
+  dplyr::filter(hh_count_2024 > 17)
 
 # Calculate hh count density
 EA_data <- EA_data %>% 

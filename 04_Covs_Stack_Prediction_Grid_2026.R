@@ -91,8 +91,8 @@ for (i in seq(1, length(bcount_list), batch_size)) {
   # Write only settled pixels to file
   covs_raster_values <- covs_raster_values %>%
     cbind(google_v2_5) %>%
-    filter(!is.na(mwi_buildings_count_2023_glv2_5_t0_5_C_100m_v1)) %>%
-    select(-mwi_buildings_count_2023_glv2_5_t0_5_C_100m_v1)
+    dplyr::filter(!is.na(mwi_buildings_count_2023_glv2_5_t0_5_C_100m_v1)) %>%
+    dplyr::select(-mwi_buildings_count_2023_glv2_5_t0_5_C_100m_v1)
 
   # Write processed covariate values to a feather file
   feather_output_path <- paste0(output_path, "Processed_bcount_2026_", i, "_to_", min(i + batch_size - 1, length(bcount_list)), ".feather")
@@ -156,8 +156,8 @@ for (i in seq(1, length(process_rasters_list), batch_size)) {
   # Write only settled pixels to file
   covs_raster_values <- covs_raster_values %>%
     cbind(google_v2_5) %>%
-    filter(!is.na(mwi_buildings_count_2023_glv2_5_t0_5_C_100m_v1)) %>%
-    select(-mwi_buildings_count_2023_glv2_5_t0_5_C_100m_v1)
+    dplyr::filter(!is.na(mwi_buildings_count_2023_glv2_5_t0_5_C_100m_v1)) %>%
+    dplyr::select(-mwi_buildings_count_2023_glv2_5_t0_5_C_100m_v1)
 
   # Write processed covariate values to a feather file
   feather_output_path <- paste0(output_path, "Processed_Covariates_2026_", i, "_to_", min(i + batch_size - 1, length(process_rasters_list)), ".feather")
@@ -253,7 +253,7 @@ ea1 <- ea %>%
   mutate(cluster_id = paste0("EA", sprintf("%06d", row_number()))) %>%
   as_tibble() %>%
   rowid_to_column("ea_id") %>%
-  select(EA_CODE, cluster_id, ea_id)
+  dplyr::select(EA_CODE, cluster_id, ea_id)
 
 # create unique id for each district
 district <- ea %>%
@@ -261,7 +261,7 @@ district <- ea %>%
   group_by(DIST_NAME) %>%
   mutate(dist_id = cur_group_id()) %>%
   ungroup() %>%
-  select(dist_id, DIST_NAME) %>%
+  dplyr::select(dist_id, DIST_NAME) %>%
   distinct()
 
 # get REG CODE
@@ -277,7 +277,7 @@ rural_urban <- ea %>%
     ADM_STATUS == "Urban" ~ 2,
     ADM_STATUS == "NA" ~ 1
   )) %>%
-  select(rural_urban_id, ADM_STATUS) %>%
+  dplyr::select(rural_urban_id, ADM_STATUS) %>%
   distinct()
 
 # Join names to prediction covariates stack
@@ -291,7 +291,7 @@ prediction_covs1 <- prediction_covs %>%
 # Rename variables
 prediction_covs1 <- prediction_covs1 %>%
   rename(long = x, lat = y) %>%
-  select(EA_CODE, cluster_id, DIST_NAME, ADM_STATUS, REG_NAME, everything())
+  dplyr::select(EA_CODE, cluster_id, DIST_NAME, ADM_STATUS, REG_NAME, dplyr::everything())
 
 
 # Export data to file

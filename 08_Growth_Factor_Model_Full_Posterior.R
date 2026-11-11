@@ -85,7 +85,7 @@ summary(pop_data$hh_count_2018) # There are 45 EAs without hh count for 2018
 
 # Filter those EAs and check them
 eas_na <- pop_data %>%
-  filter(is.na(hh_count_2018))
+  dplyr::filter(is.na(hh_count_2018))
 
 # For the purpose of this work we will replace the hh count with 1 in those EAs
 # pop_data <- pop_data %>%
@@ -115,7 +115,7 @@ summary(pop_data$growth_factor)
 # filter growth factor which is NA
 EA_data <- pop_data %>%
   drop_na(growth_factor) %>% # drop NA
-  filter(!is.infinite(growth_factor)) # drop Infinity values
+  dplyr::filter(!is.infinite(growth_factor)) # drop Infinity values
 
 # check summary stats
 summary(EA_data$growth_factor) # Summary of growth factor
@@ -156,7 +156,7 @@ ggplot(data = EA_data, aes(x = hh_count_2024)) +
 
 # Remove HH count below 10
 EA_data <- EA_data %>%
-  filter(hh_count_2024 > 10)
+  dplyr::filter(hh_count_2024 > 10)
 
 # plot HH Count
 ggplot(data = EA_data, aes(x = hh_count_2024)) +
@@ -440,7 +440,7 @@ prediction_summary_2024 %>%
 #------------------------------------------------------------------------------
 predictions_2024 <- prediction_summary_2024 %>%
   drop_na(hh_count_2024) %>%
-  filter(hh_count_2024 > 17) %>%
+  dplyr::filter(hh_count_2024 > 17) %>%
   mutate(residual = hh_count_2024 - predicted_hh_count_2024)
 
 
@@ -673,7 +673,7 @@ prediction_summary_2024 %>%
 #------------------------------------------------------------------------------
 predictions_2024 <- prediction_summary_2024 %>%
   drop_na(hh_count_2024) %>%
-  filter(hh_count_2024 > 17) %>%
+  dplyr::filter(hh_count_2024 > 17) %>%
   mutate(residual = hh_count_2024 - predicted_hh_count_2024)
 
 
@@ -918,7 +918,7 @@ prediction_summary_2024 %>%
 #------------------------------------------------------------------------------
 predictions_2024 <- prediction_summary_2024 %>%
   drop_na(hh_count_2024) %>%
-  filter(hh_count_2024 > 17) %>%
+  dplyr::filter(hh_count_2024 > 17) %>%
   mutate(residual = hh_count_2024 - predicted_hh_count_2024)
 
 
@@ -1181,7 +1181,7 @@ prediction_summary_2024 %>%
 #------------------------------------------------------------------------------
 predictions_2024 <- prediction_summary_2024 %>%
   drop_na(hh_count_2024) %>%
-  filter(hh_count_2024 > 17) %>%
+  dplyr::filter(hh_count_2024 > 17) %>%
   mutate(residual = hh_count_2024 - predicted_hh_count_2024)
 
 
@@ -1301,7 +1301,7 @@ summary(pop_data$growth_factor)
 # filter growth factor which is NA
 EA_data <- pop_data %>%
   drop_na(growth_factor) %>% # drop NA
-  filter(!is.infinite(growth_factor)) # drop Infinity values
+  dplyr::filter(!is.infinite(growth_factor)) # drop Infinity values
 
 # check summary stats
 summary(EA_data$growth_factor) # Summary of growth factor

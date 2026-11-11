@@ -91,7 +91,7 @@ ggplot(Malawi_2024_data, aes(x = "2024", y = hh_count_2024)) +
 
 #Filter household count
 EA_data <- Malawi_2024_data %>% 
-  filter(hh_count_2024 > 17)
+  dplyr::filter(hh_count_2024 > 17)
 
 
 # We will calculate household density and use it as an outcome in the linear model
@@ -107,7 +107,7 @@ summary(EA_data$hh_density_2024)
 
 #We will remove hh density above 30
 EA_data <- EA_data %>% 
-  filter(hh_density_2024 <= 30)
+  dplyr::filter(hh_density_2024 <= 30)
 
 #Summarize 
 

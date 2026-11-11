@@ -37,7 +37,7 @@ sum(duplicated(ea$EA_CODE))
 
 # Extract all rows where the EA_CODE appears more than once
 ea_duplicates <- ea %>%
-  filter(EA_CODE %in% EA_CODE[duplicated(EA_CODE)]) %>%
+  dplyr::filter(EA_CODE %in% EA_CODE[duplicated(EA_CODE)]) %>%
   arrange(EA_CODE) # Group them together by code for easy viewing
 
 # View the duplicates interactively
@@ -93,7 +93,7 @@ mphc_2018 <- mphc_2018 %>%
 
 # cg extract records where line_number = 1 but p02>1 (homeless)
 # mphc_2018_homeless <- mphc_2018 %>%
-#  filter(line_number == 1 & p02 >1)
+#  dplyr::filter(line_number == 1 & p02 >1)
 # CG Write to file
 # write.csv(mphc_2018_homeless, paste0(output_path, "mphc_2018_homeless"), row.names = F)
 
@@ -183,7 +183,7 @@ mphc_with_gps$EA_CODE <- nearest_ids
 # Convert data to tibble
 mphc_with_gps <- mphc_with_gps %>%
   as_tibble() %>%
-  select(-geometry)
+  dplyr::select(-geometry)
 
 #########################################################################
 
@@ -196,7 +196,7 @@ mphc_with_gps <- mphc_with_gps %>%
 # GPS coordinates
 logger::log_info("Processing census records without GPS coordinates.")
 mphc_no_gps <- mphc_2018 %>%
-  filter(is.na(hh_longitude) | is.na(hh_latitude))
+  dplyr::filter(is.na(hh_longitude) | is.na(hh_latitude))
 
 # summarized hh count without gps
 mphc_no_gps <- mphc_no_gps %>%
@@ -224,7 +224,7 @@ mphc_no_gps <- mphc_no_gps %>%
 
 # rbind both dataset
 mphc_rbind <- rbind(mphc_with_gps, mphc_no_gps) %>%
-  select(-Unique_HH_EA_CODE)
+  dplyr::select(-Unique_HH_EA_CODE)
 
 # Summarize overall data
 mphc_summary <- mphc_rbind %>%
@@ -274,7 +274,7 @@ summary(ICT_data$GPS__Accuracy)
 
 # Filter records without GPS coordinates and those with gps accuracy above 5m
 ict_no_gps <- ICT_data %>%
-  filter(
+  dplyr::filter(
     is.na(GPS__Longitude) |
       is.na(GPS__Latitude) |
       GPS__Accuracy > 5
@@ -292,7 +292,7 @@ ict_no_gps <- ict_no_gps %>%
 
 # Convert to an sf point object
 ICT_sf <- ICT_data %>%
-  filter(GPS__Accuracy <= 5) %>%
+  dplyr::filter(GPS__Accuracy <= 5) %>%
   drop_na(GPS__Longitude, GPS__Latitude) %>%
   st_as_sf(coords = c("GPS__Longitude", "GPS__Latitude"))
 
@@ -369,7 +369,7 @@ summary(IHS6_data$GPS__Accuracy)
 
 # Filter records without GPS coordinates and those with gps accuracy above 5m
 IHS_no_gps <- IHS6_data %>%
-  filter(
+  dplyr::filter(
     is.na(GPS__Longitude) |
       is.na(GPS__Latitude) |
       GPS__Accuracy > 5
@@ -387,7 +387,7 @@ IHS_no_gps <- IHS_no_gps %>%
 
 # Convert to sf object
 IHS_sf <- IHS6_data %>%
-  filter(GPS__Accuracy <= 5) %>%
+  dplyr::filter(GPS__Accuracy <= 5) %>%
   drop_na(GPS__Longitude, GPS__Latitude) %>%
   st_as_sf(coords = c("GPS__Longitude", "GPS__Latitude"))
 
@@ -460,7 +460,7 @@ summary(Naca_data$accuracy)
 
 # Filter records without GPS coordinates and those with gps accuracy above 5m
 Naca_no_gps <- Naca_data %>%
-  filter(
+  dplyr::filter(
     is.na(longitude) |
       is.na(latitude) |
       accuracy > 5
@@ -478,7 +478,7 @@ Naca_no_gps <- Naca_no_gps %>%
 
 # Convert to sf object
 Naca_sf <- Naca_data %>%
-  filter(accuracy <= 5) %>%
+  dplyr::filter(accuracy <= 5) %>%
   drop_na(longitude, latitude) %>%
   st_as_sf(coords = c("longitude", "latitude"))
 
@@ -547,7 +547,7 @@ unique(dhs_file$Cluster.Segmented)
 
 # Get non-segmented cluster
 non_seg_cluster <- dhs_file %>%
-  filter(grepl("^no\\b", Cluster.Segmented, ignore.case = TRUE))
+  dplyr::filter(grepl("^no\\b", Cluster.Segmented, ignore.case = TRUE))
 
 # Unique cluster id
 unique(non_seg_cluster$DHScluster)
@@ -565,7 +565,7 @@ dhs_listing <- dhs_listing %>%
 
 # Subset dhs_listing using the DHScluster IDs in non_seg_cluster
 dhs_listing <- dhs_listing %>%
-  filter(QHCLUST %in% unique(non_seg_cluster$DHScluster))
+  dplyr::filter(QHCLUST %in% unique(non_seg_cluster$DHScluster))
 
 # Summarize total number of hhold per dhs cluster
 dhs_hh_summary <- dhs_listing %>%
@@ -618,7 +618,7 @@ dhs_centroids_sf <- dhs_centroids_sf %>%
 
 # drop point more than 5km
 dhs_centroids_sf <- dhs_centroids_sf %>%
-  filter(within_5km == 1)
+  dplyr::filter(within_5km == 1)
 
 # EA Nearest Neighbor Assignment
 nearest_indices <- st_nearest_feature(dhs_centroids_sf, ea)
@@ -669,7 +669,7 @@ logger::log_info("Found {length(files)} Zomba CSV files to combine.")
 zomba_data <- files %>%
   map_dfr(~ {
     read_csv(.x, show_col_types = FALSE) %>%
-      select(
+      dplyr::select(
         -any_of(c("HOUSEHOLD NUMBER", "HOUSEHOLD.NUMBER", "registration_date")) # Remove variables
       )
   })
@@ -815,7 +815,7 @@ sum(summary_2026$total_pop_2026)
 sex_sum <- summary_2026 %>%
   mutate(
     sex_group_sum = rowSums(
-      select(., matches("^(male|female)_")),
+      dplyr::select(., matches("^(male|female)_")),
       na.rm = TRUE
     ),
     sex_sum_matches_total = sex_group_sum == total_pop_2026
@@ -864,7 +864,7 @@ combined_data <- combined_data %>%
 
 # Arrange data in proper order
 combined_data <- combined_data %>%
-  select(
+  dplyr::select(
     EA_CODE, total_pop_2018, total_pop_2026, hh_count_2018, hh_count_2024,
     hh_count_2026, everything()
   )

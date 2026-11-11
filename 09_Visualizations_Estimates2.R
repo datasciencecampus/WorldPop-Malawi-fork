@@ -27,7 +27,7 @@ estimates_2024 <- read.csv(paste0(pop_path, "EA_HH_Estimates_2024.csv"))
 
 #Latent model
 latent <- latent %>% 
-  select(EA_CODE, ADM_STATUS, DIST_NAME, hh_count_2026, hh_lower_2026,
+  dplyr::select(EA_CODE, ADM_STATUS, DIST_NAME, hh_count_2026, hh_lower_2026,
          predicted_hh_count_2026, hh_upper_2026) %>% 
   drop_na(hh_count_2026) %>% 
   rename(latent_hh_lower_2026 = hh_lower_2026, 
@@ -37,7 +37,7 @@ latent <- latent %>%
 #Full model
 full <- full %>% 
   drop_na(hh_count_2026)%>% 
-  select(EA_CODE, hh_lower_2026,
+  dplyr::select(EA_CODE, hh_lower_2026,
          predicted_hh_count_2026, hh_upper_2026) %>% 
   rename(full_posterior_hh_lower_2026 = hh_lower_2026, 
          full_posterior_predicted = predicted_hh_count_2026, 
@@ -46,13 +46,13 @@ full <- full %>%
 #Top-down estimates
 top_down <- top_down %>% 
   as_tibble() %>% 
-  select(EA_CODE, hh_stmt) %>% 
+  dplyr::select(EA_CODE, hh_stmt) %>% 
   rename(top_down_estimates_2026 = hh_stmt) %>% 
   mutate(EA_CODE = as.integer(EA_CODE))
 
 #Bottom-up model
 estimates_2024 <- estimates_2024 %>% 
-  select(EA_CODE, mean_estimate, lower, upper) %>% 
+  dplyr::select(EA_CODE, mean_estimate, lower, upper) %>% 
   rename(bottom_up_estimates = mean_estimate,
          bottom_up_upper = upper, 
          bottom_up_lower = lower)
@@ -329,7 +329,7 @@ plot_predictions <- plot_predictions %>%
 plot_predictions <- plot_predictions %>%
   left_join(
     coverage_rate %>%
-      select(model, coverage_percent),
+      dplyr::select(model, coverage_percent),
     by = "model"
   )
 
@@ -480,7 +480,7 @@ coverage_by_rural_urban
 
 
 rural_urban <- plot_predictions %>% 
-  select(ADM_STATUS, model, hh_count_2026, lower, predicted, upper)
+  dplyr::select(ADM_STATUS, model, hh_count_2026, lower, predicted, upper)
 
 validation_rural_urban <- rural_urban %>% 
   group_by(model, ADM_STATUS) %>% 
@@ -506,7 +506,7 @@ validation_rural_urban
 
 #Put results into a long format
 rural_urban_long <- validation_rural_urban %>%
-  select(model, ADM_STATUS, Bias, MAE, RMSE, Corr) %>%
+  dplyr::select(model, ADM_STATUS, Bias, MAE, RMSE, Corr) %>%
   pivot_longer(
     cols = c(Bias, MAE, RMSE, Corr),
     names_to = "Metric",
@@ -652,7 +652,7 @@ sampled_eas <- plot_predictions %>%
 
 # Filter the main dataset for only those 5 EAs
 plot_ea <- plot_predictions %>% 
-  filter(EA_CODE %in% sampled_eas) 
+  dplyr::filter(EA_CODE %in% sampled_eas) 
 
 ggplot(
   plot_ea,

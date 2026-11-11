@@ -68,7 +68,7 @@ for (i in seq(1, length(bcount_list), batch_size)) {
   # Write only settled pixels to file
   covs_raster_values <- covs_raster_values %>%
     cbind(google_v2_5) %>%
-    filter(!is.na(buildings_count_2023_glv2_5_t0_5_C_100m_v1)) %>%
+    dplyr::filter(!is.na(buildings_count_2023_glv2_5_t0_5_C_100m_v1)) %>%
     dplyr::select(-buildings_count_2023_glv2_5_t0_5_C_100m_v1)
 
   # Write processed covariate values to a feather file
@@ -133,7 +133,7 @@ for (i in seq(1, length(process_rasters_list), batch_size)) {
   # Write only settled pixels to file
   covs_raster_values <- covs_raster_values %>%
     cbind(google_v2_5) %>%
-    filter(!is.na(buildings_count_2023_glv2_5_t0_5_C_100m_v1)) %>%
+    dplyr::filter(!is.na(buildings_count_2023_glv2_5_t0_5_C_100m_v1)) %>%
     dplyr::select(-buildings_count_2023_glv2_5_t0_5_C_100m_v1)
 
   # Write processed covariate values to a feather file
