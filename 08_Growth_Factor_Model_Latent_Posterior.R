@@ -1535,7 +1535,7 @@ logger::log_info("Latent model 5 validation complete: {nrow(predictions_2026)} E
 # cg result mae 59.719, coverage 62%
 # Write Results to file
 logger::log_info("Writing 2026 latent validation predictions to {paste0(pop_path, 'Growth_Factor_Latent_Posterior.csv')}.")
-write.csv(predictions_2026, paste0(pop_path, "Growth_Factor_Latent_Posterior.csv"), row.names = F)
+write.csv(prediction_summary_2026, file.path(pop_path, "Growth_Factor_Latent_Posterior.csv"), row.names = F)
 logger::log_info("Latent prediction CSV written; preparing 2026 summaries and diagnostic plots.")
 # cg work out where this writes to, as hasn't gone to right place,where is
 # pop_path going?

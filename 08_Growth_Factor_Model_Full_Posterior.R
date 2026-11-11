@@ -31,7 +31,7 @@ logger::log_info("Starting full posterior growth-factor workflow.")
 input_path <- "Output_Data/"
 output_path <- "Output_Data/Predicted_Estimates/"
 shapefile_path <- "Data/Shapefiles/"
-pop_path <- "Output_Data/Predicted_Estimates"
+pop_path <- "Output_Data/Predicted_Estimates/"
 
 # Create output directory if it doesn't exist
 dir.create(output_path, recursive = TRUE, showWarnings = FALSE)
@@ -1635,7 +1635,7 @@ logger::log_info("Model 5 validation complete: {nrow(predictions_2026)} EAs; RMS
 
 # Write Results to file
 logger::log_info("Writing 2026 validation predictions to {paste0(pop_path, 'Growth_Factor_Full_Posterior.csv')}.")
-write.csv(predictions_2026, file.path(pop_path, "Growth_Factor_Full_Posterior.csv"), row.names = F)
+write.csv(prediction_summary_2026, file.path(pop_path, "Growth_Factor_Full_Posterior.csv"), row.names = F)
 logger::log_info("Prediction CSV written; preparing 2026 summaries and diagnostic plots.")
 
 ###############################################################################
